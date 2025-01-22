@@ -26,7 +26,7 @@ class BaseJSONParser(ABC):
     def log_summary(self, title, headers, rows):
         """
         Logs tabular summary statistics dynamically adjusted to the data.
-        Also appends the summary with a timestamp to a file.
+        Also appends the summary with a timestamp and execution command to a file.
         :param title: Title for the summary table.
         :param headers: List of column headers.
         :param rows: List of dictionaries representing rows of data.
@@ -46,15 +46,20 @@ class BaseJSONParser(ABC):
             for header in headers
         ]
 
-        # Get the class name of the subclass
+        # Get the subclass name and command used
         subclass_name = self.__class__.__name__
+        command_executed = " ".join(sys.argv)
 
         # Prepare the log content
         log_lines = []
 
-        # Add title with subclass name and timestamp
+        # Add title, subclass name, and timestamp
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_lines.append(f"{title} - {subclass_name} (Logged at: {timestamp})")
+
+        # Add command executed for reproducibility
+        log_lines.append(f"Command Executed: {command_executed}")
+
         total_width = sum(column_widths) + len(column_widths) - 1
 
         # Add header row
@@ -85,7 +90,6 @@ class BaseJSONParser(ABC):
         # Append to the file
         with open(self.details_log_path, "a") as log_file:
             log_file.write("\n".join(log_lines) + "\n\n")
-            log_file.write("\n")
 
     def read_input(self):
         """Reads JSON data from stdin."""
