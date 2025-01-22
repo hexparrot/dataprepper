@@ -1,6 +1,7 @@
 import sys
 import json
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 
 class BaseJSONParser(ABC):
@@ -12,6 +13,7 @@ class BaseJSONParser(ABC):
         :param verbose: Enable or disable logging to stderr.
         """
         self.verbose = verbose
+        self.details_log_path = "pipe_summaries"
 
     def log(self, message):
         """
@@ -24,6 +26,7 @@ class BaseJSONParser(ABC):
     def log_summary(self, title, headers, rows):
         """
         Logs tabular summary statistics dynamically adjusted to the data.
+        Also appends the summary with a timestamp to a file.
         :param title: Title for the summary table.
         :param headers: List of column headers.
         :param rows: List of dictionaries representing rows of data.
@@ -43,33 +46,46 @@ class BaseJSONParser(ABC):
             for header in headers
         ]
 
-        # Print the title, if provided
-        if title:
-            self.log(title)
+        # Get the class name of the subclass
+        subclass_name = self.__class__.__name__
 
-        # Calculate the total width for separators
+        # Prepare the log content
+        log_lines = []
+
+        # Add title with subclass name and timestamp
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_lines.append(f"{title} - {subclass_name} (Logged at: {timestamp})")
         total_width = sum(column_widths) + len(column_widths) - 1
 
-        # Print header row
-        self.log("=" * total_width)
-        self.log(
+        # Add header row
+        log_lines.append("=" * total_width)
+        log_lines.append(
             "  ".join(
                 f"{header:<{width}}" for header, width in zip(headers, column_widths)
             )
         )
-        self.log("-" * total_width)
+        log_lines.append("-" * total_width)
 
-        # Print data rows
+        # Add data rows
         for row in sanitized_rows:
-            self.log(
+            log_lines.append(
                 "  ".join(
                     f"{row[header]:<{width}}"
                     for header, width in zip(headers, column_widths)
                 )
             )
 
-        # Print footer
-        self.log("=" * total_width)
+        # Add footer
+        log_lines.append("=" * total_width)
+
+        # Log to stderr (console)
+        for line in log_lines:
+            self.log(line)
+
+        # Append to the file
+        with open(self.details_log_path, "a") as log_file:
+            log_file.write("\n".join(log_lines) + "\n\n")
+            log_file.write("\n")
 
     def read_input(self):
         """Reads JSON data from stdin."""
