@@ -28,36 +28,48 @@ class BaseJSONParser(ABC):
         :param headers: List of column headers.
         :param rows: List of dictionaries representing rows of data.
         """
-        # Determine column widths
+        if not rows:
+            self.log("No data to display in summary.")
+            return
+
+        # Ensure all rows are dictionaries and convert values to strings
+        sanitized_rows = [
+            {header: str(row.get(header, "")) for header in headers} for row in rows
+        ]
+
+        # Determine column widths dynamically
         column_widths = [
-            max(len(str(header)), *(len(str(row.get(header, ""))) for row in rows))
+            max(len(header), *(len(row[header]) for row in sanitized_rows))
             for header in headers
         ]
 
-        # Log title and header
+        # Print the title, if provided
         if title:
             self.log(title)
-        self.log(
-            "=" * (sum(column_widths) + len(column_widths) - 1)
-        )  # Account for spacing between columns
+
+        # Calculate the total width for separators
+        total_width = sum(column_widths) + len(column_widths) - 1
+
+        # Print header row
+        self.log("=" * total_width)
         self.log(
             "  ".join(
                 f"{header:<{width}}" for header, width in zip(headers, column_widths)
             )
         )
-        self.log("-" * (sum(column_widths) + len(column_widths) - 1))
+        self.log("-" * total_width)
 
-        # Log rows
-        for row in rows:
+        # Print data rows
+        for row in sanitized_rows:
             self.log(
                 "  ".join(
-                    f"{str(row.get(header, '')):<{width}}"
+                    f"{row[header]:<{width}}"
                     for header, width in zip(headers, column_widths)
                 )
             )
 
-        # Log footer
-        self.log("=" * (sum(column_widths) + len(column_widths) - 1))
+        # Print footer
+        self.log("=" * total_width)
 
     def read_input(self):
         """Reads JSON data from stdin."""
