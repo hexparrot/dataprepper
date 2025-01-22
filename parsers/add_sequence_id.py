@@ -32,9 +32,9 @@ class AddSequenceIDParser(BaseJSONParser):
             {"Metric": "Total Records Processed", "Value": len(processed_entries)},
             {
                 "Metric": "Sequence ID Range",
-                "Value": f"0 to {len(processed_entries) - 1}"
-                if processed_entries
-                else "N/A",
+                "Value": (
+                    f"0 to {len(processed_entries) - 1}" if processed_entries else "N/A"
+                ),
             },
         ]
         self.log_summary(
