@@ -18,7 +18,6 @@ class VerifyTimestampParser(BaseJSONParser):
         :return: True if the timestamp is valid, False otherwise.
         """
         try:
-            # Attempt to parse the timestamp in ISO 8601 format
             datetime.fromisoformat(timestamp)
             return True
         except (ValueError, TypeError):
@@ -27,7 +26,7 @@ class VerifyTimestampParser(BaseJSONParser):
     def process_entry(self, entry):
         """
         Processes a single entry, verifying its timestamp.
-        Logs the result in tabular form and updates summary statistics.
+        Logs the result and updates summary statistics.
         """
         sequence_id = entry.get("sequence_id", "NA")
         author = entry.get("author", "NA")
@@ -43,46 +42,34 @@ class VerifyTimestampParser(BaseJSONParser):
         else:
             self.summary[author]["invalid"] += 1
 
-        # Log the result in a tabular format
-        self.log(
-            f"{sequence_id:<12}{author:<{self.author_width}}{timestamp:<30}{status}"
-        )
+        # Log the result
+        self.log(f"{sequence_id:<12}{author:<20}{timestamp:<30}{status}")
 
         return entry
 
     def run(self):
-        """Overrides the run method to verify timestamps for all records."""
+        """Overrides the run method to verify timestamps and display summary."""
         entries = self.read_input()
 
-        # Determine the width of the Author column
-        self.author_width = max(
-            max((len(entry.get("author", "NA")) for entry in entries), default=0),
-            20,  # Minimum width of 20
-        )
-
         # Log header
-        self.log(
-            f"{'Sequence ID':<12}{'Author':<{self.author_width}}{'Timestamp':<30}{'Status'}"
-        )
-        self.log("=" * (12 + self.author_width + 30 + 7))
+        self.log(f"{'Sequence ID':<12}{'Author':<20}{'Timestamp':<30}{'Status'}")
+        self.log("=" * 70)
 
         # Process and output entries
         processed_entries = [self.process_entry(entry) for entry in entries]
 
-        # Summary
-        self.log("=" * (12 + self.author_width + 30 + 7))
+        # Summarize
+        self.log("=" * 70)
         self.log(f"Total records processed: {len(entries)}\n")
 
-        # Display summary statistics
-        self.log("Summary Statistics:")
-        self.log("=" * (12 + self.author_width + 30 + 7))
-        self.log(f"{'Author':<{self.author_width}}{'Valid':<10}{'Invalid':<10}")
-        self.log("-" * (self.author_width + 20))
-        for author, stats in self.summary.items():
-            self.log(
-                f"{author:<{self.author_width}}{stats['valid']:<10}{stats['invalid']:<10}"
-            )
-        self.log("=" * (12 + self.author_width + 30 + 7))
+        # Display summary using `log_summary`
+        summary_rows = [
+            {"Author": author, "Valid": stats["valid"], "Invalid": stats["invalid"]}
+            for author, stats in self.summary.items()
+        ]
+        self.log_summary(
+            "Summary Statistics", ["Author", "Valid", "Invalid"], summary_rows
+        )
 
         self.write_output(processed_entries)
 

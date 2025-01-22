@@ -108,15 +108,23 @@ class AverageMessageLengthParser(BaseJSONParser):
         self.log("=" * (self.author_field_width + 50))
         self.log(f"Total records processed: {len(entries)}\n")
 
-        self.log("Summary Statistics:")
-        self.log("=" * (self.author_field_width + 50))
-        for author, counts in self.summary.items():
-            summary_line = f"{author:<{self.author_field_width}}:   "
-            summary_line += "  ".join(
-                f"{symbol}: {counts[symbol]:<3}"
-                for symbol in ["++", "+", "=", "-", "--"]
-            )
-            self.log(summary_line)
+        # Convert summary data for tabular display
+        summary_rows = [
+            {
+                "Author": author,
+                "++": counts["++"],
+                "+": counts["+"],
+                "=": counts["="],
+                "-": counts["-"],
+                "--": counts["--"],
+            }
+            for author, counts in self.summary.items()
+        ]
+
+        # Use the base parser's `log_summary` to log summary statistics
+        self.log_summary(
+            "Summary Statistics", ["Author", "++", "+", "=", "-", "--"], summary_rows
+        )
 
         self.write_output(processed_entries)
 

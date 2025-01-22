@@ -21,6 +21,44 @@ class BaseJSONParser(ABC):
         if self.verbose:
             sys.stderr.write(f"{message}\n")
 
+    def log_summary(self, title, headers, rows):
+        """
+        Logs tabular summary statistics dynamically adjusted to the data.
+        :param title: Title for the summary table.
+        :param headers: List of column headers.
+        :param rows: List of dictionaries representing rows of data.
+        """
+        # Determine column widths
+        column_widths = [
+            max(len(str(header)), *(len(str(row.get(header, ""))) for row in rows))
+            for header in headers
+        ]
+
+        # Log title and header
+        if title:
+            self.log(title)
+        self.log(
+            "=" * (sum(column_widths) + len(column_widths) - 1)
+        )  # Account for spacing between columns
+        self.log(
+            "  ".join(
+                f"{header:<{width}}" for header, width in zip(headers, column_widths)
+            )
+        )
+        self.log("-" * (sum(column_widths) + len(column_widths) - 1))
+
+        # Log rows
+        for row in rows:
+            self.log(
+                "  ".join(
+                    f"{str(row.get(header, '')):<{width}}"
+                    for header, width in zip(headers, column_widths)
+                )
+            )
+
+        # Log footer
+        self.log("=" * (sum(column_widths) + len(column_widths) - 1))
+
     def read_input(self):
         """Reads JSON data from stdin."""
         try:
