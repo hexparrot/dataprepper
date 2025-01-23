@@ -17,7 +17,7 @@ from keep_authors import KeepAuthorsPipe
 from rewrite_author_norm import NormalizeAuthorPipe
 from remove_fields import RemoveFieldsPipe
 from verify_nonempty_values import CheckNonEmptyValuesPipe
-from verify_timestamp import VerifyTimestampPipe
+from drop_invalid_timestamp import VerifyTimestampPipe
 
 
 class TestPipes(unittest.TestCase):
