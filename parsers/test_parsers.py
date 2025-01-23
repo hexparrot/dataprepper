@@ -11,6 +11,11 @@ sys.path.insert(0, os.path.dirname(__file__))
 # Import parsers directly from the local directory
 from add_convo_id import AddConvoIDParser
 from add_replydeltas import AddReplyDeltaParser
+from augment_age import AugmentAgeParser
+from duplicate_field import AddDuplicatedFieldParser
+from filter_author import FilterAuthorsParser
+from normalize_author import NormalizeAuthorParser
+from remove_fields import RemoveFieldsParser
 from verify_nonempty_values import CheckNonEmptyValuesParser
 
 
@@ -125,6 +130,63 @@ class TestParsers(unittest.TestCase):
         self.assertIn("Non-Empty Fields Validation Summary", stderr)
         self.assertIn("Total Records Processed", stderr)
         self.assertIn("Proportion Valid (%)", stderr)
+
+    def test_augment_age(self):
+        """Test the AugmentAgeParser."""
+        stdout, stderr = self.run_parser(
+            AugmentAgeParser, self.test_input, "2000-10-11", "itsame"
+        )
+        output = json.loads(stdout)
+
+        # Verify ages are added
+        self.assertIn("author_age", output[0])
+        self.assertEqual(output[0]["author_age"], 13)  # Example age calculation
+        self.assertNotIn("author_age", output[1])
+
+    def test_filter_author(self):
+        """Test the FilterAuthorParser."""
+        stdout, stderr = self.run_parser(
+            FilterAuthorsParser, self.test_input, "ramenten4buck,suddenwar"
+        )
+        output = json.loads(stdout)
+
+        # Verify only specified authors are retained
+        for record in output:
+            self.assertIn(record["author"], ["itsame", "mario"])
+
+    def test_normalize_author(self):
+        """Test the NormalizeAuthorParser."""
+        normalize_test_json = [
+            {
+                "author": "  its a me   ",
+                "message": "Hello!",
+                "timestamp": "2014-02-25T00:31:28",
+            },
+            {
+                "author": "MARIo",
+                "message": "Hi there!",
+                "timestamp": "2014-02-25T00:31:32",
+            },
+        ]
+        stdout, stderr = self.run_parser(
+            NormalizeAuthorParser, json.dumps(normalize_test_json)
+        )
+        output = json.loads(stdout)
+
+        # Verify authors are normalized
+        self.assertEqual(output[0]["author"], "itsame")
+        self.assertEqual(output[1]["author"], "mario")
+
+    def test_remove_fields(self):
+        """Test the RemoveFieldsParser."""
+        stdout, stderr = self.run_parser(
+            RemoveFieldsParser, self.test_input, "timestamp"
+        )
+        output = json.loads(stdout)
+
+        # Verify specified fields are removed
+        for record in output:
+            self.assertNotIn("timestamp", record)
 
 
 if __name__ == "__main__":
