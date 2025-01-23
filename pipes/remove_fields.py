@@ -5,8 +5,8 @@ from collections import defaultdict
 from baseparser import BaseJSONPipe
 
 
-class RemoveFieldsParser(BaseJSONPipe):
-    """Parser to remove specified fields from JSON records."""
+class RemoveFieldsPipe(BaseJSONPipe):
+    """Pipe to remove specified fields from JSON records."""
 
     def __init__(self, fields, verbose=True):
         super().__init__(verbose)
@@ -108,5 +108,5 @@ if __name__ == "__main__":
         sys.exit(1)
 
     fields_to_remove = sys.argv[1]
-    parser = RemoveFieldsParser(fields_to_remove)
+    parser = RemoveFieldsPipe(fields_to_remove)
     parser.run()

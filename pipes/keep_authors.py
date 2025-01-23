@@ -5,8 +5,8 @@ from collections import defaultdict
 from baseparser import BaseJSONPipe
 
 
-class KeepAuthorsParser(BaseJSONPipe):
-    """Parser to filter JSON records by a list of allowed authors."""
+class KeepAuthorsPipe(BaseJSONPipe):
+    """Pipe to filter JSON records by a list of allowed authors."""
 
     def __init__(self, allowed_authors, verbose=True):
         super().__init__(verbose)
@@ -103,5 +103,5 @@ if __name__ == "__main__":
         sys.exit(1)
 
     allowed_authors = sys.argv[1]
-    parser = FilterAuthorsParser(allowed_authors)
+    parser = FilterAuthorsPipe(allowed_authors)
     parser.run()

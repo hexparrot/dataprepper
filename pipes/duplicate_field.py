@@ -2,7 +2,7 @@
 from baseparser import BaseJSONPipe
 
 
-class AddDuplicatedFieldParser(BaseJSONPipe):
+class AddDuplicatedFieldPipe(BaseJSONPipe):
     def process_entry(self, entry):
         """Adds a duplicated field based on an existing field."""
         entry["duplicated_field"] = entry.get("convo_id", "")
@@ -10,5 +10,5 @@ class AddDuplicatedFieldParser(BaseJSONPipe):
 
 
 if __name__ == "__main__":
-    parser = AddDuplicatedFieldParser()
+    parser = AddDuplicatedFieldPipe()
     parser.run()

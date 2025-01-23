@@ -4,8 +4,8 @@ import json
 from baseparser import BaseJSONPipe
 
 
-class CheckNonEmptyValuesParser(BaseJSONPipe):
-    """Parser to validate records for required non-empty fields."""
+class CheckNonEmptyValuesPipe(BaseJSONPipe):
+    """Pipe to validate records for required non-empty fields."""
 
     def __init__(self, required_fields, verbose=True):
         """
@@ -95,5 +95,5 @@ if __name__ == "__main__":
 
     # Parse required fields from command line arguments
     required_fields = sys.argv[1].split(",")
-    parser = CheckNonEmptyValuesParser(required_fields)
+    parser = CheckNonEmptyValuesPipe(required_fields)
     parser.run()

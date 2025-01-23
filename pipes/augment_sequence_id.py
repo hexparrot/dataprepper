@@ -2,8 +2,8 @@
 from baseparser import BaseJSONPipe
 
 
-class AugmentSequenceIDParser(BaseJSONPipe):
-    """Parser to append a sequence_id to each JSON record."""
+class AugmentSequenceIDPipe(BaseJSONPipe):
+    """Pipe to append a sequence_id to each JSON record."""
 
     def __init__(self, verbose=True):
         super().__init__(verbose)
@@ -46,5 +46,5 @@ class AugmentSequenceIDParser(BaseJSONPipe):
 
 
 if __name__ == "__main__":
-    parser = AugmentSequenceIDParser()
+    parser = AugmentSequenceIDPipe()
     parser.run()

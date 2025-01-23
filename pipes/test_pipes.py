@@ -9,17 +9,17 @@ from contextlib import redirect_stdout, redirect_stderr
 sys.path.insert(0, os.path.dirname(__file__))
 
 # Import parsers directly from the local directory
-from augment_convo_id import AugmentConvoIDParser
-from augment_replydeltas import AugmentReplyDeltaParser
-from augment_age import AugmentAgeParser
-from duplicate_field import AddDuplicatedFieldParser
-from keep_authors import KeepAuthorsParser
-from normalize_author import NormalizeAuthorParser
-from remove_fields import RemoveFieldsParser
-from verify_nonempty_values import CheckNonEmptyValuesParser
+from augment_convo_id import AugmentConvoIDPipe
+from augment_replydeltas import AugmentReplyDeltaPipe
+from augment_age import AugmentAgePipe
+from duplicate_field import AddDuplicatedFieldPipe
+from keep_authors import KeepAuthorsPipe
+from normalize_author import NormalizeAuthorPipe
+from remove_fields import RemoveFieldsPipe
+from verify_nonempty_values import CheckNonEmptyValuesPipe
 
 
-class TestParsers(unittest.TestCase):
+class TestPipes(unittest.TestCase):
     def setUp(self):
         """Set up test JSON input and reusable variables."""
         self.test_json = [
@@ -64,8 +64,8 @@ class TestParsers(unittest.TestCase):
         return stdout.getvalue(), stderr.getvalue()
 
     def test_add_convo_id(self):
-        """Test the AugmentConvoIDParser."""
-        stdout, stderr = self.run_parser(AugmentConvoIDParser, self.test_input)
+        """Test the AugmentConvoIDPipe."""
+        stdout, stderr = self.run_parser(AugmentConvoIDPipe, self.test_input)
         output = json.loads(stdout)
 
         # Verify convo_id is added and formatted correctly
@@ -79,8 +79,8 @@ class TestParsers(unittest.TestCase):
         self.assertIn("Random Prefix Used", stderr)
 
     def test_add_reply_deltas(self):
-        """Test the AugmentReplyDeltaParser."""
-        stdout, stderr = self.run_parser(AugmentReplyDeltaParser, self.test_input)
+        """Test the AugmentReplyDeltaPipe."""
+        stdout, stderr = self.run_parser(AugmentReplyDeltaPipe, self.test_input)
         output = json.loads(stdout)
 
         # Verify reply deltas are calculated correctly
@@ -96,7 +96,7 @@ class TestParsers(unittest.TestCase):
         self.assertIn("Main Authors Identified", stderr)
 
     def test_verify_nonempty_values(self):
-        """Test the CheckNonEmptyValuesParser."""
+        """Test the CheckNonEmptyValuesPipe."""
         incomplete_json = json.dumps(
             [
                 {
@@ -112,7 +112,7 @@ class TestParsers(unittest.TestCase):
             ]
         )
         stdout, stderr = self.run_parser(
-            CheckNonEmptyValuesParser,
+            CheckNonEmptyValuesPipe,
             incomplete_json,
             ["author", "message", "timestamp"],
         )
@@ -132,9 +132,9 @@ class TestParsers(unittest.TestCase):
         self.assertIn("Proportion Valid (%)", stderr)
 
     def test_augment_age(self):
-        """Test the AugmentAgeParser."""
+        """Test the AugmentAgePipe."""
         stdout, stderr = self.run_parser(
-            AugmentAgeParser, self.test_input, "2000-10-11", "itsame"
+            AugmentAgePipe, self.test_input, "2000-10-11", "itsame"
         )
         output = json.loads(stdout)
 
@@ -144,9 +144,9 @@ class TestParsers(unittest.TestCase):
         self.assertNotIn("author_age", output[1])
 
     def test_keep_author(self):
-        """Test the KeepAuthorParser."""
+        """Test the KeepAuthorPipe."""
         stdout, stderr = self.run_parser(
-            KeepAuthorsParser, self.test_input, "ramenten4buck,suddenwar"
+            KeepAuthorsPipe, self.test_input, "ramenten4buck,suddenwar"
         )
         output = json.loads(stdout)
 
@@ -155,7 +155,7 @@ class TestParsers(unittest.TestCase):
             self.assertIn(record["author"], ["itsame", "mario"])
 
     def test_normalize_author(self):
-        """Test the NormalizeAuthorParser."""
+        """Test the NormalizeAuthorPipe."""
         normalize_test_json = [
             {
                 "author": "  its a me   ",
@@ -169,7 +169,7 @@ class TestParsers(unittest.TestCase):
             },
         ]
         stdout, stderr = self.run_parser(
-            NormalizeAuthorParser, json.dumps(normalize_test_json)
+            NormalizeAuthorPipe, json.dumps(normalize_test_json)
         )
         output = json.loads(stdout)
 
@@ -178,10 +178,8 @@ class TestParsers(unittest.TestCase):
         self.assertEqual(output[1]["author"], "mario")
 
     def test_remove_fields(self):
-        """Test the RemoveFieldsParser."""
-        stdout, stderr = self.run_parser(
-            RemoveFieldsParser, self.test_input, "timestamp"
-        )
+        """Test the RemoveFieldsPipe."""
+        stdout, stderr = self.run_parser(RemoveFieldsPipe, self.test_input, "timestamp")
         output = json.loads(stdout)
 
         # Verify specified fields are removed

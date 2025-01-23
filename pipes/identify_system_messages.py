@@ -3,8 +3,8 @@ from collections import Counter
 from baseparser import BaseJSONPipe
 
 
-class IdentifySystemMessagesParser(BaseJSONPipe):
-    """Parser to identify main authors and reformat system/auto-reply messages."""
+class IdentifySystemMessagesPipe(BaseJSONPipe):
+    """Pipe to identify main authors and reformat system/auto-reply messages."""
 
     def __init__(self, verbose=True):
         super().__init__(verbose)
@@ -71,5 +71,5 @@ class IdentifySystemMessagesParser(BaseJSONPipe):
 
 
 if __name__ == "__main__":
-    parser = IdentifySystemMessagesParser()
+    parser = IdentifySystemMessagesPipe()
     parser.run()

@@ -4,8 +4,8 @@ import unicodedata
 import re
 
 
-class NormalizeAuthorParser(BaseJSONPipe):
-    """Parser to normalize author names."""
+class NormalizeAuthorPipe(BaseJSONPipe):
+    """Pipe to normalize author names."""
 
     def __init__(self, verbose=True):
         super().__init__(verbose)
@@ -99,5 +99,5 @@ class NormalizeAuthorParser(BaseJSONPipe):
 
 
 if __name__ == "__main__":
-    parser = NormalizeAuthorParser()
+    parser = NormalizeAuthorPipe()
     parser.run()

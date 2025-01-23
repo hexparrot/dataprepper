@@ -3,8 +3,8 @@ from datetime import datetime
 from baseparser import BaseJSONPipe
 
 
-class AugmentAgeParser(BaseJSONPipe):
-    """Parser to augment JSON records with author age at the time of their message."""
+class AugmentAgePipe(BaseJSONPipe):
+    """Pipe to augment JSON records with author age at the time of their message."""
 
     def __init__(self, birthdate, authors, verbose=True):
         super().__init__(verbose)
@@ -85,5 +85,5 @@ if __name__ == "__main__":
 
     birthdate = sys.argv[1]
     authors = sys.argv[2]
-    parser = AugmentAgeParser(birthdate, authors)
+    parser = AugmentAgePipe(birthdate, authors)
     parser.run()

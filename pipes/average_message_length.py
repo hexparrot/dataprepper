@@ -4,8 +4,8 @@ from collections import defaultdict
 import math
 
 
-class AverageMessageLengthParser(BaseJSONPipe):
-    """Parser to calculate average message length per author."""
+class AverageMessageLengthPipe(BaseJSONPipe):
+    """Pipe to calculate average message length per author."""
 
     def calculate_stats(self, entries):
         """
@@ -130,5 +130,5 @@ class AverageMessageLengthParser(BaseJSONPipe):
 
 
 if __name__ == "__main__":
-    parser = AverageMessageLengthParser()
+    parser = AverageMessageLengthPipe()
     parser.run()

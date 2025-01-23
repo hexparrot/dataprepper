@@ -4,8 +4,8 @@ from datetime import datetime
 from collections import defaultdict
 
 
-class VerifyTimestampParser(BaseJSONPipe):
-    """Parser to verify that each record contains a complete timestamp."""
+class VerifyTimestampPipe(BaseJSONPipe):
+    """Pipe to verify that each record contains a complete timestamp."""
 
     def __init__(self, verbose=True):
         super().__init__(verbose)
@@ -75,5 +75,5 @@ class VerifyTimestampParser(BaseJSONPipe):
 
 
 if __name__ == "__main__":
-    parser = VerifyTimestampParser()
+    parser = VerifyTimestampPipe()
     parser.run()
