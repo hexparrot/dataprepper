@@ -16,7 +16,7 @@ from duplicate_field import AddDuplicatedFieldPipe
 from keep_authors import KeepAuthorsPipe
 from rewrite_author_norm import NormalizeAuthorPipe
 from remove_fields import RemoveFieldsPipe
-from verify_nonempty_values import CheckNonEmptyValuesPipe
+from drop_empty_values import DropEmptyValuesPipe
 from drop_invalid_timestamp import VerifyTimestampPipe
 
 
@@ -126,7 +126,7 @@ class TestPipes(unittest.TestCase):
         self.assertEqual(output[0]["timestamp"], "2014-02-25T00:31:28")
 
     def test_verify_nonempty_values(self):
-        """Test the CheckNonEmptyValuesPipe."""
+        """Test the DropEmptyValuesPipe."""
         incomplete_json = json.dumps(
             [
                 {
@@ -142,7 +142,7 @@ class TestPipes(unittest.TestCase):
             ]
         )
         stdout, stderr = self.run_parser(
-            CheckNonEmptyValuesPipe,
+            DropEmptyValuesPipe,
             incomplete_json,
             ["author", "message", "timestamp"],
         )
