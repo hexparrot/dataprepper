@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import sys
 import json
-from baseparser import BaseJSONParser
+from baseparser import BaseJSONPipe
 
 
-class CheckNonEmptyValuesParser(BaseJSONParser):
+class CheckNonEmptyValuesParser(BaseJSONPipe):
     """Parser to validate records for required non-empty fields."""
 
     def __init__(self, required_fields, verbose=True):

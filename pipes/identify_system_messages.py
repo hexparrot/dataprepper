@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 from collections import Counter
-from baseparser import BaseJSONParser
+from baseparser import BaseJSONPipe
 
 
-class IdentifySystemMessagesParser(BaseJSONParser):
+class IdentifySystemMessagesParser(BaseJSONPipe):
     """Parser to identify main authors and reformat system/auto-reply messages."""
 
     def __init__(self, verbose=True):

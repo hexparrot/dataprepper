@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-from baseparser import BaseJSONParser
+from baseparser import BaseJSONPipe
 from datetime import datetime
 from collections import defaultdict
 
 
-class VerifyTimestampParser(BaseJSONParser):
+class VerifyTimestampParser(BaseJSONPipe):
     """Parser to verify that each record contains a complete timestamp."""
 
     def __init__(self, verbose=True):

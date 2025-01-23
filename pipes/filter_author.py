@@ -2,10 +2,10 @@
 import sys
 import json
 from collections import defaultdict
-from baseparser import BaseJSONParser
+from baseparser import BaseJSONPipe
 
 
-class FilterAuthorsParser(BaseJSONParser):
+class FilterAuthorsParser(BaseJSONPipe):
     """Parser to filter JSON records by a list of allowed authors."""
 
     def __init__(self, allowed_authors, verbose=True):

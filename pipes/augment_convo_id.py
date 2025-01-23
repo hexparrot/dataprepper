@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import random
 import string
-from baseparser import BaseJSONParser
+from baseparser import BaseJSONPipe
 
 
-class AugmentConvoIDParser(BaseJSONParser):
+class AugmentConvoIDParser(BaseJSONPipe):
     """Parser to add a convo_id field to each JSON record."""
 
     def __init__(self, verbose=True):

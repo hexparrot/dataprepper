@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-from baseparser import BaseJSONParser
+from baseparser import BaseJSONPipe
 import unicodedata
 import re
 
 
-class NormalizeAuthorParser(BaseJSONParser):
+class NormalizeAuthorParser(BaseJSONPipe):
     """Parser to normalize author names."""
 
     def __init__(self, verbose=True):

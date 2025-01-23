@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 
 
-class BaseJSONParser(ABC):
+class BaseJSONPipe(ABC):
     """Base class for JSON parsing."""
 
     def __init__(self, verbose=True):

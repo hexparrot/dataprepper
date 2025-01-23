@@ -2,10 +2,10 @@
 import sys
 import json
 from collections import defaultdict
-from baseparser import BaseJSONParser
+from baseparser import BaseJSONPipe
 
 
-class RemoveFieldsParser(BaseJSONParser):
+class RemoveFieldsParser(BaseJSONPipe):
     """Parser to remove specified fields from JSON records."""
 
     def __init__(self, fields, verbose=True):

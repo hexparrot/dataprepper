@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-from baseparser import BaseJSONParser
+from baseparser import BaseJSONPipe
 from collections import defaultdict
 import math
 
 
-class AverageMessageLengthParser(BaseJSONParser):
+class AverageMessageLengthParser(BaseJSONPipe):
     """Parser to calculate average message length per author."""
 
     def calculate_stats(self, entries):

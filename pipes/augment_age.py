@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 from datetime import datetime
-from baseparser import BaseJSONParser
+from baseparser import BaseJSONPipe
 
 
-class AugmentAgeParser(BaseJSONParser):
+class AugmentAgeParser(BaseJSONPipe):
     """Parser to augment JSON records with author age at the time of their message."""
 
     def __init__(self, birthdate, authors, verbose=True):

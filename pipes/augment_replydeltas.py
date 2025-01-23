@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 from datetime import datetime
 from collections import defaultdict, Counter
-from baseparser import BaseJSONParser
+from baseparser import BaseJSONPipe
 
 
-class AugmentReplyDeltaParser(BaseJSONParser):
+class AugmentReplyDeltaParser(BaseJSONPipe):
     """Parser to add reply deltas for the two main authors in a conversation."""
 
     def __init__(self, verbose=True):
