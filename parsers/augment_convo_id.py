@@ -4,7 +4,7 @@ import string
 from baseparser import BaseJSONParser
 
 
-class AddConvoIDParser(BaseJSONParser):
+class AugmentConvoIDParser(BaseJSONParser):
     """Parser to add a convo_id field to each JSON record."""
 
     def __init__(self, verbose=True):
@@ -53,5 +53,5 @@ class AddConvoIDParser(BaseJSONParser):
 
 
 if __name__ == "__main__":
-    parser = AddConvoIDParser()
+    parser = AugmentConvoIDParser()
     parser.run()

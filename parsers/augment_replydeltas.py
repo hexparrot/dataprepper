@@ -4,7 +4,7 @@ from collections import defaultdict, Counter
 from baseparser import BaseJSONParser
 
 
-class AddReplyDeltaParser(BaseJSONParser):
+class AugmentReplyDeltaParser(BaseJSONParser):
     """Parser to add reply deltas for the two main authors in a conversation."""
 
     def __init__(self, verbose=True):
@@ -127,5 +127,5 @@ class AddReplyDeltaParser(BaseJSONParser):
 
 
 if __name__ == "__main__":
-    parser = AddReplyDeltaParser()
+    parser = AugmentReplyDeltaParser()
     parser.run()

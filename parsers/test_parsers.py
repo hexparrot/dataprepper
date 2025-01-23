@@ -9,8 +9,8 @@ from contextlib import redirect_stdout, redirect_stderr
 sys.path.insert(0, os.path.dirname(__file__))
 
 # Import parsers directly from the local directory
-from add_convo_id import AddConvoIDParser
-from add_replydeltas import AddReplyDeltaParser
+from augment_convo_id import AugmentConvoIDParser
+from augment_replydeltas import AugmentReplyDeltaParser
 from augment_age import AugmentAgeParser
 from duplicate_field import AddDuplicatedFieldParser
 from filter_author import FilterAuthorsParser
@@ -64,8 +64,8 @@ class TestParsers(unittest.TestCase):
         return stdout.getvalue(), stderr.getvalue()
 
     def test_add_convo_id(self):
-        """Test the AddConvoIDParser."""
-        stdout, stderr = self.run_parser(AddConvoIDParser, self.test_input)
+        """Test the AugmentConvoIDParser."""
+        stdout, stderr = self.run_parser(AugmentConvoIDParser, self.test_input)
         output = json.loads(stdout)
 
         # Verify convo_id is added and formatted correctly
@@ -79,8 +79,8 @@ class TestParsers(unittest.TestCase):
         self.assertIn("Random Prefix Used", stderr)
 
     def test_add_reply_deltas(self):
-        """Test the AddReplyDeltaParser."""
-        stdout, stderr = self.run_parser(AddReplyDeltaParser, self.test_input)
+        """Test the AugmentReplyDeltaParser."""
+        stdout, stderr = self.run_parser(AugmentReplyDeltaParser, self.test_input)
         output = json.loads(stdout)
 
         # Verify reply deltas are calculated correctly

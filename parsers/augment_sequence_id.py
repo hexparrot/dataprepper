@@ -2,7 +2,7 @@
 from baseparser import BaseJSONParser
 
 
-class AddSequenceIDParser(BaseJSONParser):
+class AugmentSequenceIDParser(BaseJSONParser):
     """Parser to append a sequence_id to each JSON record."""
 
     def __init__(self, verbose=True):
@@ -46,5 +46,5 @@ class AddSequenceIDParser(BaseJSONParser):
 
 
 if __name__ == "__main__":
-    parser = AddSequenceIDParser()
+    parser = AugmentSequenceIDParser()
     parser.run()
