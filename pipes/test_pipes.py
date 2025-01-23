@@ -17,6 +17,7 @@ from keep_authors import KeepAuthorsPipe
 from rewrite_author_norm import NormalizeAuthorPipe
 from remove_fields import RemoveFieldsPipe
 from verify_nonempty_values import CheckNonEmptyValuesPipe
+from verify_timestamp import VerifyTimestampPipe
 
 
 class TestPipes(unittest.TestCase):
@@ -94,6 +95,35 @@ class TestPipes(unittest.TestCase):
         self.assertIn("Reply Delta Augmentation Summary", stderr)
         self.assertIn("Total Records Processed", stderr)
         self.assertIn("Main Authors Identified", stderr)
+
+    def test_verify_timestamps(self):
+        """Test the VerifyTimestampPipe."""
+        test_json = json.dumps(
+            [
+                {
+                    "author": "itsame",
+                    "message": "Hello!",
+                    "timestamp": "2014-02-25T00:31:28",  # Valid timestamp
+                },
+                {
+                    "author": "mario",
+                    "message": "Hola",
+                    "timestamp": "invalid-timestamp",  # Invalid timestamp
+                },
+                {
+                    "author": "luigi",
+                    "message": "Hi!",
+                    "timestamp": None,  # Missing timestamp
+                },
+            ]
+        )
+        stdout, stderr = self.run_parser(VerifyTimestampPipe, test_json)
+        output = json.loads(stdout)
+
+        # Verify that valid records are retained
+        self.assertEqual(len(output), 1)
+        self.assertEqual(output[0]["author"], "itsame")
+        self.assertEqual(output[0]["timestamp"], "2014-02-25T00:31:28")
 
     def test_verify_nonempty_values(self):
         """Test the CheckNonEmptyValuesPipe."""

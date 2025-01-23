@@ -30,10 +30,13 @@ class VerifyTimestampPipe(BaseJSONPipe):
         """
         sequence_id = entry.get("sequence_id", "NA")
         author = entry.get("author", "NA")
-        timestamp = entry.get("timestamp", "NA")
+        timestamp = entry.get("timestamp")  # Allow None here
+
+        # Safely convert the timestamp to a string for logging
+        timestamp_str = str(timestamp) if timestamp is not None else "NA"
 
         # Check if the timestamp is valid
-        is_valid = self.is_valid_timestamp(timestamp)
+        is_valid = self.is_valid_timestamp(timestamp) if timestamp else False
         status = "VALID" if is_valid else "INVALID"
 
         # Update summary statistics
@@ -43,9 +46,9 @@ class VerifyTimestampPipe(BaseJSONPipe):
             self.summary[author]["invalid"] += 1
 
         # Log the result
-        self.log(f"{sequence_id:<12}{author:<20}{timestamp:<30}{status}")
+        self.log(f"{sequence_id:<12}{author:<20}{timestamp_str:<30}{status}")
 
-        return entry
+        return entry if is_valid else None  # Return None for invalid entries
 
     def run(self):
         """Overrides the run method to verify timestamps and display summary."""
@@ -55,8 +58,10 @@ class VerifyTimestampPipe(BaseJSONPipe):
         self.log(f"{'Sequence ID':<12}{'Author':<20}{'Timestamp':<30}{'Status'}")
         self.log("=" * 70)
 
-        # Process and output entries
-        processed_entries = [self.process_entry(entry) for entry in entries]
+        # Process entries and filter out invalid ones
+        processed_entries = [
+            entry for entry in (self.process_entry(e) for e in entries) if entry
+        ]
 
         # Summarize
         self.log("=" * 70)
