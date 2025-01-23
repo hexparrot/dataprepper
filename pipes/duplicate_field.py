@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-from baseparser import BaseJSONParser
+from basepipe import BaseJSONPipe
 
 
-class AddDuplicatedFieldParser(BaseJSONParser):
+class AddDuplicatedFieldPipe(BaseJSONPipe):
     def process_entry(self, entry):
         """Adds a duplicated field based on an existing field."""
         entry["duplicated_field"] = entry.get("convo_id", "")
@@ -10,5 +10,5 @@ class AddDuplicatedFieldParser(BaseJSONParser):
 
 
 if __name__ == "__main__":
-    parser = AddDuplicatedFieldParser()
+    parser = AddDuplicatedFieldPipe()
     parser.run()
