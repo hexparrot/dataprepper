@@ -14,7 +14,7 @@ from augment_replydeltas import AugmentReplyDeltaPipe
 from augment_age import AugmentAgePipe
 from duplicate_field import AddDuplicatedFieldPipe
 from keep_authors import KeepAuthorsPipe
-from normalize_author import NormalizeAuthorPipe
+from rewrite_author_norm import NormalizeAuthorPipe
 from remove_fields import RemoveFieldsPipe
 from verify_nonempty_values import CheckNonEmptyValuesPipe
 
