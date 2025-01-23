@@ -13,7 +13,7 @@ from augment_convo_id import AugmentConvoIDParser
 from augment_replydeltas import AugmentReplyDeltaParser
 from augment_age import AugmentAgeParser
 from duplicate_field import AddDuplicatedFieldParser
-from filter_author import FilterAuthorsParser
+from keep_authors import KeepAuthorsParser
 from normalize_author import NormalizeAuthorParser
 from remove_fields import RemoveFieldsParser
 from verify_nonempty_values import CheckNonEmptyValuesParser
@@ -143,10 +143,10 @@ class TestParsers(unittest.TestCase):
         self.assertEqual(output[0]["author_age"], 13)  # Example age calculation
         self.assertNotIn("author_age", output[1])
 
-    def test_filter_author(self):
-        """Test the FilterAuthorParser."""
+    def test_keep_author(self):
+        """Test the KeepAuthorParser."""
         stdout, stderr = self.run_parser(
-            FilterAuthorsParser, self.test_input, "ramenten4buck,suddenwar"
+            KeepAuthorsParser, self.test_input, "ramenten4buck,suddenwar"
         )
         output = json.loads(stdout)
 
