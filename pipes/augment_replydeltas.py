@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from datetime import datetime
 from collections import defaultdict, Counter
-from baseparser import BaseJSONPipe
+from basepipe import BaseJSONPipe
 
 
 class AugmentReplyDeltaPipe(BaseJSONPipe):

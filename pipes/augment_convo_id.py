@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import random
 import string
-from baseparser import BaseJSONPipe
+from basepipe import BaseJSONPipe
 
 
 class AugmentConvoIDPipe(BaseJSONPipe):

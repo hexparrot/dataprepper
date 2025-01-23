@@ -2,7 +2,7 @@
 import sys
 import json
 from collections import defaultdict
-from baseparser import BaseJSONPipe
+from basepipe import BaseJSONPipe
 
 
 class KeepAuthorsPipe(BaseJSONPipe):

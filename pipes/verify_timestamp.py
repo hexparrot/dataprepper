@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from baseparser import BaseJSONPipe
+from basepipe import BaseJSONPipe
 from datetime import datetime
 from collections import defaultdict
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import json
-from baseparser import BaseJSONPipe
+from basepipe import BaseJSONPipe
 
 
 class CheckNonEmptyValuesPipe(BaseJSONPipe):

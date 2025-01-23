@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from collections import Counter
-from baseparser import BaseJSONPipe
+from basepipe import BaseJSONPipe
 
 
 class IdentifySystemMessagesPipe(BaseJSONPipe):

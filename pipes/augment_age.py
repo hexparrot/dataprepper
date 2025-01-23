@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from datetime import datetime
-from baseparser import BaseJSONPipe
+from basepipe import BaseJSONPipe
 
 
 class AugmentAgePipe(BaseJSONPipe):
