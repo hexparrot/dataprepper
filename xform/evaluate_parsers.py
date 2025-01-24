@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
-import json
+import csv
+import sys
 from format_a_parser import FormatAParser
 from format_b_parser import FormatBParser
 from format_c_parser import FormatCParser
@@ -90,10 +91,9 @@ def main():
                 "complete_timestamps": is_complete,
             }
 
-    # Output the performance table
-    print("\nPerformance Table:\n")
-    headers = ["File", *parsers.keys()]
-    table = [headers]
+    # Write the performance table to CSV
+    csv_headers = ["File", *parsers.keys()]
+    csv_rows = []
 
     for file, parser_results in results.items():
         row = [file]
@@ -101,15 +101,13 @@ def main():
             result = parser_results.get(parser_name, {})
             row.append(
                 result.get("valid_records", 0)
-            )  # Use valid_records as the primary metric
-        table.append(row)
+            )  # Use valid_records as the metric
+        csv_rows.append(row)
 
-    # Print the table
-    max_lengths = [max(len(str(row[i])) for row in table) for i in range(len(headers))]
-    for row in table:
-        print(
-            " | ".join(str(row[i]).ljust(max_lengths[i]) for i in range(len(headers)))
-        )
+    # Output CSV to stdout
+    writer = csv.writer(sys.stdout)
+    writer.writerow(csv_headers)  # Write headers
+    writer.writerows(csv_rows)  # Write data rows
 
 
 if __name__ == "__main__":
