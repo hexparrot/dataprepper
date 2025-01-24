@@ -19,6 +19,7 @@ from remove_fields import RemoveFieldsPipe
 from drop_empty_values import DropEmptyValuesPipe
 from drop_invalid_timestamp import VerifyTimestampPipe
 from filter_by_length import FilterByLengthPipe
+from rewrite_user_assistant import RewriteUserAssistantPipe
 
 
 class TestPipes(unittest.TestCase):
@@ -227,6 +228,23 @@ class TestPipes(unittest.TestCase):
         self.assertEqual(len(output), 1)
         self.assertEqual(output[0]["author"], "mario")
         self.assertEqual(output[0]["message"], "thinking about rescuing a princess")
+
+    def test_rename_authors(self):
+        """Test the RewriteUserAssistantPipe."""
+        # Specify authors to rename to 'user'
+        user_authors = ["itsame"]
+
+        # Run the parser
+        stdout, stderr = self.run_parser(
+            RewriteUserAssistantPipe, self.test_input, user_authors
+        )
+        output = json.loads(stdout)
+
+        # Verify the authors are correctly renamed
+        self.assertEqual(output[0]["author"], "user")
+        self.assertEqual(output[1]["author"], "assistant")
+        self.assertEqual(output[2]["author"], "user")
+        self.assertEqual(output[3]["author"], "assistant")
 
 
 if __name__ == "__main__":
