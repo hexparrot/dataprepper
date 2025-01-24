@@ -36,7 +36,7 @@ def main():
     parsers = {
         "FormatA": FormatAParser(date_str=date_str),
         "FormatB": FormatBParser(),
-        "FormatC": FormatCParser(),
+        "FormatC": FormatCParser(date_str=date_str),
         "FormatD": FormatDParser(date_str=date_str),
     }
 
