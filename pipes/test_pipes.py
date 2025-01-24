@@ -18,6 +18,7 @@ from rewrite_author_norm import NormalizeAuthorPipe
 from remove_fields import RemoveFieldsPipe
 from drop_empty_values import DropEmptyValuesPipe
 from drop_invalid_timestamp import VerifyTimestampPipe
+from filter_by_length import FilterByLengthPipe
 
 
 class TestPipes(unittest.TestCase):
@@ -215,6 +216,17 @@ class TestPipes(unittest.TestCase):
         # Verify specified fields are removed
         for record in output:
             self.assertNotIn("timestamp", record)
+
+    def test_filter_by_length(self):
+        """Test the FilterByLengthPipe."""
+        # Run the parser with a minimum length of 12
+        stdout, stderr = self.run_parser(FilterByLengthPipe, self.test_input, 15)
+        output = json.loads(stdout)
+
+        # Verify that only records meeting the length requirement are retained
+        self.assertEqual(len(output), 1)
+        self.assertEqual(output[0]["author"], "mario")
+        self.assertEqual(output[0]["message"], "thinking about rescuing a princess")
 
 
 if __name__ == "__main__":
