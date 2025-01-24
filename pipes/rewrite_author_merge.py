@@ -13,7 +13,7 @@ class MergeAuthorsPipe(BaseJSONPipe):
         :param verbose: Enable or disable logging to stderr.
         """
         super().__init__(verbose)
-        self.authors_to_replace = set(authors_to_replace.split(","))
+        self.authors_to_replace = set(authors_to_replace)
         self.replacement_author = replacement_author
 
     def process_entry(self, entry):
@@ -48,3 +48,19 @@ class MergeAuthorsPipe(BaseJSONPipe):
 
         # Write the output
         self.write_output(processed_entries)
+
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) != 3:
+        print(
+            "Usage: ./rewrite_authors.py <comma-separated-authors> <replacement-author>",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    authors_to_replace = sys.argv[1].split(",")
+    replacement_author = sys.argv[2]
+    parser = MergeAuthorsPipe(authors_to_replace, replacement_author)
+    parser.run()
