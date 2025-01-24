@@ -5,7 +5,7 @@ from datetime import datetime
 class BaseParser(ABC):
     """
     Abstract base class for chat parsers.
-    Ensures a consistent interface and JSON output format, with unified Unicode handling.
+    Ensures a consistent interface and JSON output format, with unified validation.
     """
 
     def parse(self, html_content: str) -> list[dict]:
@@ -16,7 +16,11 @@ class BaseParser(ABC):
         """
         sanitized_content = self._sanitize_content(html_content)
         raw_records = self._extract_records(sanitized_content)
-        return [self._normalize_record(record) for record in raw_records]
+        return [
+            record
+            for record in map(self._normalize_record, raw_records)
+            if self._validate_record(record)
+        ]
 
     def _sanitize_content(self, html_content: str) -> str:
         """
@@ -47,6 +51,16 @@ class BaseParser(ABC):
             "message": raw_record.get("message", "").strip(),
             "timestamp": self._format_timestamp(raw_record.get("timestamp", "")),
         }
+
+    def _validate_record(self, record: dict) -> bool:
+        """
+        Validate that a record has all required fields.
+        :param record: A JSON record.
+        :return: True if valid, False otherwise.
+        """
+        # Ensure 'author', 'message', and 'timestamp' are non-empty
+        required_fields = ["author", "message", "timestamp"]
+        return all(record.get(field) for field in required_fields)
 
     def _format_timestamp(self, raw_timestamp: str) -> str:
         """
