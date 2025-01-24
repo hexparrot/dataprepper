@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import json
-from format_a_parser import FormatAParser
+from format_d_parser import FormatDParser
 
 
 def main():
@@ -12,13 +12,13 @@ def main():
     html_content = sys.stdin.read()
 
     # Initialize the parser
-    parser = FormatAParser(date_str="2005-08-13")  # Customize date if needed
+    parser = FormatDParser(date_str="1970-01-01")  # Use the date from the filename
 
     try:
         # Parse the HTML content
         records = parser.parse(html_content)
 
-        # Output the parsed JSON to stdout
+        # Debugging: Print parsed records
         print(json.dumps(records, indent=4))
 
     except Exception as e:

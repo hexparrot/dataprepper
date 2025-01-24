@@ -4,6 +4,7 @@ import json
 from format_a_parser import FormatAParser
 from format_b_parser import FormatBParser
 from format_c_parser import FormatCParser
+from format_d_parser import FormatDParser
 from datetime import datetime
 
 
@@ -51,6 +52,7 @@ def main():
         "FormatA": FormatAParser(),
         "FormatB": FormatBParser(),
         "FormatC": FormatCParser(),
+        "FormatD": FormatDParser(),
     }
 
     # HTML files to test
