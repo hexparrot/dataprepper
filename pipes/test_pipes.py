@@ -21,6 +21,7 @@ from drop_invalid_timestamp import VerifyTimestampPipe
 from filter_by_length import FilterByLengthPipe
 from rewrite_user_assistant import RewriteUserAssistantPipe
 from rewrite_author import RenameAuthorPipe
+from rewrite_author_merge import MergeAuthorsPipe
 
 
 class TestPipes(unittest.TestCase):
@@ -263,6 +264,27 @@ class TestPipes(unittest.TestCase):
         self.assertEqual(output[1]["author"], "user")
         self.assertEqual(output[2]["author"], "user")
         self.assertEqual(output[3]["author"], "user")
+
+    def test_merge_authors(self):
+        """Test the MergeAuthorsPipe."""
+        # Specify authors to replace and the replacement value
+        authors_to_replace = "itsame,mario"
+        replacement_author = "luigi"
+
+        # Run the parser
+        stdout, stderr = self.run_parser(
+            MergeAuthorsPipe, self.test_input, authors_to_replace, replacement_author
+        )
+        output = json.loads(stdout)
+
+        # Verify the authors are correctly rewritten
+        self.assertEqual(output[0]["author"], "luigi")  # itsame replaced
+        self.assertEqual(output[1]["author"], "luigi")  # mario replaced
+        self.assertEqual(output[2]["author"], "luigi")  # itsame replaced
+        self.assertEqual(output[3]["author"], "luigi")  # mario replaced
+
+        # Verify no data is dropped
+        self.assertEqual(len(output), len(self.test_json))
 
 
 if __name__ == "__main__":
