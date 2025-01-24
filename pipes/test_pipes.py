@@ -20,6 +20,7 @@ from drop_empty_values import DropEmptyValuesPipe
 from drop_invalid_timestamp import VerifyTimestampPipe
 from filter_by_length import FilterByLengthPipe
 from rewrite_user_assistant import RewriteUserAssistantPipe
+from rewrite_author import RenameAuthorPipe
 
 
 class TestPipes(unittest.TestCase):
@@ -229,7 +230,7 @@ class TestPipes(unittest.TestCase):
         self.assertEqual(output[0]["author"], "mario")
         self.assertEqual(output[0]["message"], "thinking about rescuing a princess")
 
-    def test_rename_authors(self):
+    def test_rewrite_authors(self):
         """Test the RewriteUserAssistantPipe."""
         # Specify authors to rename to 'user'
         user_authors = ["itsame"]
@@ -245,6 +246,23 @@ class TestPipes(unittest.TestCase):
         self.assertEqual(output[1]["author"], "assistant")
         self.assertEqual(output[2]["author"], "user")
         self.assertEqual(output[3]["author"], "assistant")
+
+    def test_rename_authors(self):
+        """Test the RenameAuthorPipe."""
+        # Specify authors to rename to 'user'
+        user_authors = "user"
+
+        # Run the parser
+        stdout, stderr = self.run_parser(
+            RenameAuthorPipe, self.test_input, user_authors
+        )
+        output = json.loads(stdout)
+
+        # Verify the authors are correctly renamed
+        self.assertEqual(output[0]["author"], "user")
+        self.assertEqual(output[1]["author"], "user")
+        self.assertEqual(output[2]["author"], "user")
+        self.assertEqual(output[3]["author"], "user")
 
 
 if __name__ == "__main__":
