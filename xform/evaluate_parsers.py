@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import os
 import json
-from format_a_parser import FormatAParser  # Add more parsers here
+from format_a_parser import FormatAParser
+from format_b_parser import FormatBParser
 from datetime import datetime
 
 
@@ -46,7 +47,8 @@ def validate_records(records):
 def main():
     # Parsers to evaluate
     parsers = {
-        "FormatA": FormatAParser(),  # Add other parsers here
+        "FormatA": FormatAParser(),
+        "FormatB": FormatBParser(),
     }
 
     # HTML files to test
