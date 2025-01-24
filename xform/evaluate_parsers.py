@@ -3,6 +3,7 @@ import os
 import json
 from format_a_parser import FormatAParser
 from format_b_parser import FormatBParser
+from format_c_parser import FormatCParser
 from datetime import datetime
 
 
@@ -49,6 +50,7 @@ def main():
     parsers = {
         "FormatA": FormatAParser(),
         "FormatB": FormatBParser(),
+        "FormatC": FormatCParser(),
     }
 
     # HTML files to test
