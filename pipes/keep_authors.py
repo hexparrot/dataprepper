@@ -103,5 +103,5 @@ if __name__ == "__main__":
         sys.exit(1)
 
     allowed_authors = sys.argv[1]
-    parser = FilterAuthorsPipe(allowed_authors)
+    parser = KeepAuthorsPipe(allowed_authors)
     parser.run()
