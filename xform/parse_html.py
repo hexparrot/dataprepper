@@ -34,10 +34,10 @@ def main():
 
     # Initialize all available parsers with the provided or default date
     parsers = {
-        "FormatA": FormatAParser(),
+        "FormatA": FormatAParser(date_str=date_str),
         "FormatB": FormatBParser(),
         "FormatC": FormatCParser(),
-        "FormatD": FormatDParser(date_str=date_str),  # Provide the date argument
+        "FormatD": FormatDParser(date_str=date_str),
     }
 
     best_parser = None

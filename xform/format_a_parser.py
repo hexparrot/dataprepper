@@ -8,7 +8,7 @@ class FormatAParser(BaseParser):
     Parser for chat logs in Format A.
     """
 
-    def __init__(self, date_str="2005-08-13"):
+    def __init__(self, date_str="1970-01-01"):
         """
         Initialize the parser with the date string in 'YYYY-MM-DD' format.
         """
