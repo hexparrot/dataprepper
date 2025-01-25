@@ -13,6 +13,7 @@ from augment_author_age import AugmentAgePipe
 from augment_convo_id import AugmentConvoIDPipe
 from augment_duplicate_field import AddDuplicatedFieldPipe
 from augment_replydeltas import AugmentReplyDeltaPipe
+from augment_sequence_id import AugmentSequenceIDPipe
 from drop_empty_values import DropEmptyValuesPipe
 from drop_invalid_timestamp import VerifyTimestampPipe
 from drop_nonmatching_authors import KeepAuthorsPipe
@@ -328,6 +329,16 @@ class TestPipes(unittest.TestCase):
 
         # Verify no data is dropped
         self.assertEqual(len(output), len(json.loads(test_json_with_newlines)))
+
+    def test_augment_sequence_id(self):
+        """Test the AugmentSequenceIDPipe."""
+        stdout, stderr = self.run_parser(AugmentSequenceIDPipe, self.test_input)
+        output = json.loads(stdout)
+
+        # Verify sequence IDs are correctly assigned
+        for idx, record in enumerate(output):
+            self.assertIn("sequence_id", record)
+            self.assertEqual(record["sequence_id"], idx)
 
 
 if __name__ == "__main__":
