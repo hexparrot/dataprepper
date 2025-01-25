@@ -31,21 +31,21 @@ The executable scripts in the `pipes/` directory accept stdin and produce stdout
 ╭────┬─────────────────────────────╮
 │  # │            name             │
 ├────┼─────────────────────────────┤
-│  0 │ augment_age.py              │
+│  0 │ augment_author_age.py       │
 │  1 │ augment_convo_id.py         │
-│  2 │ augment_replydeltas.py      │
-│  3 │ augment_sequence_id.py      │
-│  4 │ calc_message_stats.py       │
-│  5 │ drop_empty_values.py        │
-│  6 │ drop_invalid_timestamp.py   │
-│  7 │ duplicate_field.py          │
-│  8 │ filter_by_length.py         │
-│  9 │ keep_authors.py             │
-│ 10 │ remove_fields.py            │
-│ 11 │ rewrite_author.py           │
-│ 12 │ rewrite_author_merge.py     │
-│ 13 │ rewrite_author_norm.py      │
-│ 14 │ rewrite_newlines.py         │
+│  2 │ augment_duplicate_field.py  │
+│  3 │ augment_replydeltas.py      │
+│  4 │ augment_sequence_id.py      │
+│  5 │ calc_message_stats.py       │
+│  6 │ drop_empty_values.py        │
+│  7 │ drop_invalid_timestamp.py   │
+│  8 │ drop_nonmatching_authors.py │
+│  9 │ drop_short_messages.py      │
+│ 10 │ rewrite_author.py           │
+│ 11 │ rewrite_author_merge.py     │
+│ 12 │ rewrite_author_norm.py      │
+│ 13 │ rewrite_newlines.py         │
+│ 14 │ rewrite_omit_fields.py      │
 │ 15 │ rewrite_system_messages.py  │
 │ 16 │ rewrite_user_assistant.py   │
 ╰────┴─────────────────────────────╯
@@ -54,3 +54,4 @@ The executable scripts in the `pipes/` directory accept stdin and produce stdout
 - **drop_**   : Drop a record matching a criteria
 - **rewrite_**: Modify the value of a record and return the record
 
+These can be chained infinitely for any amount of preprocessing based on the downstream needs.
