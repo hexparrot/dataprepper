@@ -9,20 +9,20 @@ from contextlib import redirect_stdout, redirect_stderr
 sys.path.insert(0, os.path.dirname(__file__))
 
 # Import parsers directly from the local directory
+from augment_author_age import AugmentAgePipe
 from augment_convo_id import AugmentConvoIDPipe
+from augment_duplicate_field import AddDuplicatedFieldPipe
 from augment_replydeltas import AugmentReplyDeltaPipe
-from augment_age import AugmentAgePipe
-from duplicate_field import AddDuplicatedFieldPipe
-from keep_authors import KeepAuthorsPipe
-from rewrite_author_norm import NormalizeAuthorPipe
-from remove_fields import RemoveFieldsPipe
 from drop_empty_values import DropEmptyValuesPipe
 from drop_invalid_timestamp import VerifyTimestampPipe
-from filter_by_length import FilterByLengthPipe
-from rewrite_user_assistant import RewriteUserAssistantPipe
+from drop_nonmatching_authors import KeepAuthorsPipe
+from drop_short_messages import FilterByLengthPipe
 from rewrite_author import RenameAuthorPipe
 from rewrite_author_merge import MergeAuthorsPipe
+from rewrite_author_norm import NormalizeAuthorPipe
 from rewrite_newlines import RewriteNewlinesPipe
+from rewrite_omit_fields import RemoveFieldsPipe
+from rewrite_user_assistant import RewriteUserAssistantPipe
 
 
 class TestPipes(unittest.TestCase):

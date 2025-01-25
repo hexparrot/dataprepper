@@ -20,8 +20,8 @@ for json_file in "$INPUT_DIR"/*.json; do
     # Process the file
     if cat "$json_file" \
         | ./pipes/rewrite_author_norm.py \
-        | ./pipes/remove_fields.py "$FIELDS_TO_REMOVE" \
-        | ./pipes/filter_by_length.py "$FILTER_LENGTH" \
+        | ./pipes/rewrite_omit_fields.py "$FIELDS_TO_REMOVE" \
+        | ./pipes/drop_short_messages.py "$FILTER_LENGTH" \
         | ./pipes/rewrite_author_merge.py "$KEPT_AUTHORS" user \
         | ./pipes/rewrite_newlines.py \
         > "$output_file"; then
