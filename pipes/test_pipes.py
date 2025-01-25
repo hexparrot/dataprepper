@@ -23,6 +23,7 @@ from rewrite_author_merge import MergeAuthorsPipe
 from rewrite_author_norm import NormalizeAuthorPipe
 from rewrite_newlines import RewriteNewlinesPipe
 from rewrite_omit_fields import RemoveFieldsPipe
+from rewrite_system_messages import IdentifySystemMessagesPipe
 from rewrite_user_assistant import RewriteUserAssistantPipe
 
 
@@ -339,6 +340,66 @@ class TestPipes(unittest.TestCase):
         for idx, record in enumerate(output):
             self.assertIn("sequence_id", record)
             self.assertEqual(record["sequence_id"], idx)
+
+    def test_identify_system_messages(self):
+        """Test the IdentifySystemMessagesPipe."""
+        # Test input with system messages
+        test_json_with_system_messages = json.dumps(
+            [
+                {
+                    "author": "user1",
+                    "message": "Hello!",
+                    "timestamp": "2014-02-25T00:31:28",
+                },
+                {
+                    "author": "autoresponsefromuser2",
+                    "message": "I am not available right now.",
+                    "timestamp": "2014-02-25T00:31:32",
+                },
+                {
+                    "author": "user1",
+                    "message": "Got it. Thanks!",
+                    "timestamp": "2014-02-25T00:31:35",
+                },
+            ]
+        )
+
+        # Expected output after processing
+        expected_output = [
+            {
+                "author": "user1",
+                "message": "Hello!",
+                "timestamp": "2014-02-25T00:31:28",
+            },
+            {
+                "author": "system",
+                "message": "user2 autoresponse: I am not available right now.",
+                "timestamp": "2014-02-25T00:31:32",
+            },
+            {
+                "author": "user1",
+                "message": "Got it. Thanks!",
+                "timestamp": "2014-02-25T00:31:35",
+            },
+        ]
+
+        # Run the parser
+        stdout, stderr = self.run_parser(
+            IdentifySystemMessagesPipe, test_json_with_system_messages
+        )
+        output = json.loads(stdout)
+
+        # Verify the processed output matches the expected result
+        self.assertEqual(output, expected_output)
+
+        # Check that the main authors were identified correctly
+        self.assertIn("System Message Identification Summary", stderr)
+        self.assertIn("Main Authors Identified", stderr)
+        self.assertIn("user1", stderr)
+        self.assertIn("user2", stderr)
+
+        # Verify the secondary author count is logged
+        self.assertIn("Secondary Authors (e.g., system)", stderr)
 
 
 if __name__ == "__main__":
