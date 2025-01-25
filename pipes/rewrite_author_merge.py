@@ -13,7 +13,7 @@ class MergeAuthorsPipe(BaseJSONPipe):
         :param verbose: Enable or disable logging to stderr.
         """
         super().__init__(verbose)
-        self.authors_to_replace = set(authors_to_replace)
+        self.authors_to_replace = set(authors_to_replace.split(","))
         self.replacement_author = replacement_author
 
     def process_entry(self, entry):
