@@ -9,20 +9,22 @@ from contextlib import redirect_stdout, redirect_stderr
 sys.path.insert(0, os.path.dirname(__file__))
 
 # Import parsers directly from the local directory
+from augment_author_age import AugmentAgePipe
 from augment_convo_id import AugmentConvoIDPipe
+from augment_duplicate_field import AddDuplicatedFieldPipe
 from augment_replydeltas import AugmentReplyDeltaPipe
-from augment_age import AugmentAgePipe
-from duplicate_field import AddDuplicatedFieldPipe
-from keep_authors import KeepAuthorsPipe
-from rewrite_author_norm import NormalizeAuthorPipe
-from remove_fields import RemoveFieldsPipe
+from augment_sequence_id import AugmentSequenceIDPipe
 from drop_empty_values import DropEmptyValuesPipe
 from drop_invalid_timestamp import VerifyTimestampPipe
-from filter_by_length import FilterByLengthPipe
-from rewrite_user_assistant import RewriteUserAssistantPipe
+from drop_nonmatching_authors import KeepAuthorsPipe
+from drop_short_messages import FilterByLengthPipe
 from rewrite_author import RenameAuthorPipe
 from rewrite_author_merge import MergeAuthorsPipe
+from rewrite_author_norm import NormalizeAuthorPipe
 from rewrite_newlines import RewriteNewlinesPipe
+from rewrite_omit_fields import RemoveFieldsPipe
+from rewrite_system_messages import IdentifySystemMessagesPipe
+from rewrite_user_assistant import RewriteUserAssistantPipe
 
 
 class TestPipes(unittest.TestCase):
@@ -328,6 +330,76 @@ class TestPipes(unittest.TestCase):
 
         # Verify no data is dropped
         self.assertEqual(len(output), len(json.loads(test_json_with_newlines)))
+
+    def test_augment_sequence_id(self):
+        """Test the AugmentSequenceIDPipe."""
+        stdout, stderr = self.run_parser(AugmentSequenceIDPipe, self.test_input)
+        output = json.loads(stdout)
+
+        # Verify sequence IDs are correctly assigned
+        for idx, record in enumerate(output):
+            self.assertIn("sequence_id", record)
+            self.assertEqual(record["sequence_id"], idx)
+
+    def test_identify_system_messages(self):
+        """Test the IdentifySystemMessagesPipe."""
+        # Test input with system messages
+        test_json_with_system_messages = json.dumps(
+            [
+                {
+                    "author": "user1",
+                    "message": "Hello!",
+                    "timestamp": "2014-02-25T00:31:28",
+                },
+                {
+                    "author": "autoresponsefromuser2",
+                    "message": "I am not available right now.",
+                    "timestamp": "2014-02-25T00:31:32",
+                },
+                {
+                    "author": "user1",
+                    "message": "Got it. Thanks!",
+                    "timestamp": "2014-02-25T00:31:35",
+                },
+            ]
+        )
+
+        # Expected output after processing
+        expected_output = [
+            {
+                "author": "user1",
+                "message": "Hello!",
+                "timestamp": "2014-02-25T00:31:28",
+            },
+            {
+                "author": "system",
+                "message": "user2 autoresponse: I am not available right now.",
+                "timestamp": "2014-02-25T00:31:32",
+            },
+            {
+                "author": "user1",
+                "message": "Got it. Thanks!",
+                "timestamp": "2014-02-25T00:31:35",
+            },
+        ]
+
+        # Run the parser
+        stdout, stderr = self.run_parser(
+            IdentifySystemMessagesPipe, test_json_with_system_messages
+        )
+        output = json.loads(stdout)
+
+        # Verify the processed output matches the expected result
+        self.assertEqual(output, expected_output)
+
+        # Check that the main authors were identified correctly
+        self.assertIn("System Message Identification Summary", stderr)
+        self.assertIn("Main Authors Identified", stderr)
+        self.assertIn("user1", stderr)
+        self.assertIn("user2", stderr)
+
+        # Verify the secondary author count is logged
+        self.assertIn("Secondary Authors (e.g., system)", stderr)
 
 
 if __name__ == "__main__":

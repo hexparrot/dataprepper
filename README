@@ -1,0 +1,57 @@
+# **DataPrepper**
+
+`DataPrepper` is a tool for parsing and transforming HTML chat logs into structured JSON format. It supports multiple parsing strategies, efficiently processes files in bulk, and provides clean, normalized outputs ready for downstream processing or analysis.
+
+## **Features**
+
+- **Multi-Parser Support**: Utilizes multiple parsers to ensure maximum extraction of valid records.
+- **Recursive File Processing**: Handles nested directories of `.html` and `.htm` files.
+- **Output Customization**: Outputs JSON files with recipient-date-based filenames.
+- **Collision Handling**: Avoids filename collisions with incremental numbering.
+- **Pipe-Friendly Design**: Integrates seamlessly with shell pipelines for efficient workflows.
+
+## **Usage**
+
+`./process_html_dir.sh <inputdir> <outputdir>`
+
+Recursively iterate a directory for .html files, creating a new directory of JSON files with a 1:1 mapping containing the following extracted information:
+
+- author
+- timestamp
+- message
+
+`./process_json_dir.sh <inputdir> <outputdir>`
+
+Iterate through a flat directory of .json files, creating a new directory of JSON files with modified attributes/cleaned data. Modify `process_json_dir.sh` to match specific use cases. Training a BERT model requires different formats than GPT models, so changing up the applicable pipes and author metadata, etc., is required for proper training.
+
+`pipes/`
+
+The executable scripts in the `pipes/` directory accept stdin and produce stdout, doing one of a few actions:
+
+╭────┬─────────────────────────────╮
+│  # │            name             │
+├────┼─────────────────────────────┤
+│  0 │ augment_author_age.py       │
+│  1 │ augment_convo_id.py         │
+│  2 │ augment_duplicate_field.py  │
+│  3 │ augment_replydeltas.py      │
+│  4 │ augment_sequence_id.py      │
+│  5 │ calc_message_stats.py       │
+│  6 │ drop_empty_values.py        │
+│  7 │ drop_invalid_timestamp.py   │
+│  8 │ drop_nonmatching_authors.py │
+│  9 │ drop_short_messages.py      │
+│ 10 │ rewrite_author.py           │
+│ 11 │ rewrite_author_merge.py     │
+│ 12 │ rewrite_author_norm.py      │
+│ 13 │ rewrite_newlines.py         │
+│ 14 │ rewrite_omit_fields.py      │
+│ 15 │ rewrite_system_messages.py  │
+│ 16 │ rewrite_user_assistant.py   │
+╰────┴─────────────────────────────╯
+
+- **augment_**: Create a new field for the record and return the record
+- **drop_**   : Drop a record matching a criteria
+- **rewrite_**: Modify the value of a record and return the record
+
+These can be chained infinitely for any amount of preprocessing based on the downstream needs.
