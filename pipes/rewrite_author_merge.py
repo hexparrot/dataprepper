@@ -60,7 +60,7 @@ if __name__ == "__main__":
         )
         sys.exit(1)
 
-    authors_to_replace = sys.argv[1].split(",")
+    authors_to_replace = sys.argv[1]
     replacement_author = sys.argv[2]
     parser = MergeAuthorsPipe(authors_to_replace, replacement_author)
     parser.run()
