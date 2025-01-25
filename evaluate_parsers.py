@@ -2,10 +2,10 @@
 import os
 import csv
 import sys
-from format_a_parser import FormatAParser
-from format_b_parser import FormatBParser
-from format_c_parser import FormatCParser
-from format_d_parser import FormatDParser
+from xform.format_a_parser import FormatAParser
+from xform.format_b_parser import FormatBParser
+from xform.format_c_parser import FormatCParser
+from xform.format_d_parser import FormatDParser
 from datetime import datetime
 
 
@@ -57,7 +57,7 @@ def main():
     }
 
     # HTML files to test
-    test_dir = "../testdata/html"
+    test_dir = "testdata/html"
     html_files = [
         f for f in os.listdir(test_dir) if f.endswith(".htm") or f.endswith(".html")
     ]

@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup, NavigableString, Tag
 from datetime import datetime
 import re
 import html
-from base_parser import BaseParser
+from xform.base_parser import BaseParser
 
 
 class FormatCParser(BaseParser):

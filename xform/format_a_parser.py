@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 from datetime import datetime
-from base_parser import BaseParser
+from xform.base_parser import BaseParser
 
 
 class FormatAParser(BaseParser):

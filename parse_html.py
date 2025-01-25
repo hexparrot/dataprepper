@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import sys
 import json
-from format_a_parser import FormatAParser
-from format_b_parser import FormatBParser
-from format_c_parser import FormatCParser
-from format_d_parser import FormatDParser
+from xform.format_a_parser import FormatAParser
+from xform.format_b_parser import FormatBParser
+from xform.format_c_parser import FormatCParser
+from xform.format_d_parser import FormatDParser
 
 
 def main():
