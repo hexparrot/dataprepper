@@ -22,6 +22,7 @@ from filter_by_length import FilterByLengthPipe
 from rewrite_user_assistant import RewriteUserAssistantPipe
 from rewrite_author import RenameAuthorPipe
 from rewrite_author_merge import MergeAuthorsPipe
+from rewrite_newlines import RewriteNewlinesPipe
 
 
 class TestPipes(unittest.TestCase):
@@ -285,6 +286,48 @@ class TestPipes(unittest.TestCase):
 
         # Verify no data is dropped
         self.assertEqual(len(output), len(self.test_json))
+
+    def test_normalize_newlines(self):
+        """Test the NormalizeNewlinesPipe."""
+        # Input with newlines and backslashes
+        test_json_with_newlines = json.dumps(
+            [
+                {
+                    "author": "itsame",
+                    "message": "hello\nthere\\",
+                    "timestamp": "2014-02-25T00:31:28",
+                },
+                {
+                    "author": "mario",
+                    "message": "hola\namigo\\",
+                    "timestamp": "2014-02-25T00:31:32",
+                },
+            ]
+        )
+
+        # Expected output after normalization
+        expected_output = [
+            {
+                "author": "itsame",
+                "message": "hello there ",
+                "timestamp": "2014-02-25T00:31:28",
+            },
+            {
+                "author": "mario",
+                "message": "hola amigo ",
+                "timestamp": "2014-02-25T00:31:32",
+            },
+        ]
+
+        # Run the parser
+        stdout, stderr = self.run_parser(RewriteNewlinesPipe, test_json_with_newlines)
+        output = json.loads(stdout)
+
+        # Verify the normalization
+        self.assertEqual(output, expected_output)
+
+        # Verify no data is dropped
+        self.assertEqual(len(output), len(json.loads(test_json_with_newlines)))
 
 
 if __name__ == "__main__":
