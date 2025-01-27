@@ -47,7 +47,32 @@ def validate_records(records):
     return valid_count, is_complete
 
 
+def find_html_files(directory):
+    """
+    Recursively find all HTML files in the given directory.
+    :param directory: The root directory to search.
+    :return: List of file paths to HTML files.
+    """
+    html_files = []
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith(".htm") or file.endswith(".html"):
+                html_files.append(os.path.join(root, file))
+    return html_files
+
+
 def main():
+    if len(sys.argv) != 2:
+        print("Usage: evaluate_parsers.py <directory>", file=sys.stderr)
+        sys.exit(1)
+
+    # Directory containing test files
+    test_dir = sys.argv[1]
+
+    if not os.path.isdir(test_dir):
+        print(f"Error: {test_dir} is not a valid directory.", file=sys.stderr)
+        sys.exit(1)
+
     # Parsers to evaluate
     parsers = {
         "FormatA": FormatAParser(),
@@ -56,23 +81,22 @@ def main():
         "FormatD": FormatDParser(),
     }
 
-    # HTML files to test
-    test_dir = "testdata/html"
-    html_files = [
-        f for f in os.listdir(test_dir) if f.endswith(".htm") or f.endswith(".html")
-    ]
+    # Recursively find all HTML files
+    html_files = find_html_files(test_dir)
+    if not html_files:
+        print(f"No HTML files found in directory: {test_dir}", file=sys.stderr)
+        sys.exit(1)
 
     # Performance results
     results = {}
 
     for file in html_files:
-        file_path = os.path.join(test_dir, file)
         results[file] = {}
 
         # Extract date from filename
-        file_date = extract_date_from_filename(file)
+        file_date = extract_date_from_filename(os.path.basename(file))
 
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(file, "r", encoding="utf-8", errors="ignore") as f:
             html_content = f.read()
 
         for parser_name, parser in parsers.items():

@@ -1,116 +1,152 @@
 from bs4 import BeautifulSoup
 from datetime import datetime
-import re
 from xform.base_parser import BaseParser
 
 
 class FormatDParser(BaseParser):
     """
-    Parser for chat logs in Format D.
+    Combined parser for Formats A and D.
     """
 
-    def __init__(self, date_str=""):
+    def __init__(self, date_str="1970-01-01"):
         """
-        Initialize the parser with an optional date string in 'YYYY-MM-DD' format.
-        If not provided, the date must be inferred from context or filename.
+        Initialize the parser with the date string in 'YYYY-MM-DD' format.
         """
         self.date_str = date_str
 
     def _extract_records(self, html_content: str) -> list[dict]:
         """
-        Extract raw records from the HTML content for Format D.
-        :param html_content: Sanitized HTML content as a string.
+        Extract raw records using combined logic from Format A and Format D.
+        :param html_content: Raw HTML content as a string.
         :return: List of dictionaries with 'author', 'message', and 'timestamp'.
         """
         soup = BeautifulSoup(html_content, "html.parser")
         raw_records = []
 
-        # Find all <span> tags with specific inline styles
-        span_tags = soup.find_all(
+        # Find all <span> elements with background-color #ffffff
+        span_elements = soup.find_all(
             "span",
             style=lambda value: value and "background-color: #ffffff" in value.lower(),
         )
 
-        for span in span_tags:
+        for span in span_elements:
             try:
-                # Extract the author
-                author = self._extract_author(span)
-                if not author:
-                    continue
+                # Try parsing with Format A logic
+                author, timestamp = self._extract_author_and_timestamp_a(span)
+                if author and timestamp:
+                    message = self._extract_message_a(span)
+                    if message:
+                        raw_records.append(
+                            {
+                                "author": author,
+                                "message": message,
+                                "timestamp": timestamp,
+                            }
+                        )
+                        continue
 
-                # Extract the timestamp
-                timestamp = self._extract_timestamp(span)
-                if not timestamp:
-                    continue
-
-                # Extract the message
-                message = self._extract_message(span)
-                if not message:
-                    continue
-
-                # Append the raw record
-                raw_records.append(
-                    {
-                        "author": author,
-                        "message": message,
-                        "timestamp": timestamp,
-                    }
-                )
+                # If Format A fails, fallback to Format D logic
+                author, timestamp = self._extract_author_and_timestamp_d(span)
+                if author and timestamp:
+                    message = self._extract_message_d(span)
+                    if message:
+                        raw_records.append(
+                            {
+                                "author": author,
+                                "message": message,
+                                "timestamp": timestamp,
+                            }
+                        )
             except Exception:
-                # Skip spans that fail processing
                 continue
 
         return raw_records
 
-    def _extract_author(self, span):
+    # Format A methods
+    def _extract_author_and_timestamp_a(self, span):
         """
-        Extract the author from the <b> tag inside the <font> tag within the <span>.
-        Removes any parenthesized text from the author's name.
-        :param span: The <span> element containing the author.
-        :return: Extracted author as a string or None if not found.
+        Extract author and timestamp using Format A logic.
         """
-        font_tag = span.find("font", color="#ff0000")
-        if not font_tag:
-            return None
+        first_font = span.find(
+            "font",
+            color=lambda value: value and value.lower() in ["#ff0000", "#0000ff"],
+        )
+        if not first_font:
+            return None, None
 
-        bold_tag = font_tag.find("b")
-        if bold_tag:
-            # Strip parentheses and their contents from the author name
-            author_text = bold_tag.get_text(strip=True)
-            return re.sub(r"\s*\(.*?\)", "", author_text).strip()
+        author = first_font.get_text(strip=True).split("(")[0].strip()
 
-        # Fallback if <b> is not found
-        author_text = font_tag.get_text(strip=True)
-        return re.sub(r"\s*\(.*?\)", "", author_text).strip()
-
-    def _extract_timestamp(self, span):
-        """
-        Extract and format the timestamp from the nested <span> tag.
-        :param span: The <span> element containing the timestamp.
-        :return: ISO 8601 formatted timestamp or None if invalid.
-        """
         time_span = span.find(
             "span", style=lambda value: value and "font-size: xx-small" in value.lower()
         )
         if not time_span:
-            return None
+            return None, None
 
-        timestamp_text = time_span.get_text(strip=True).strip("()")
+        time_text = time_span.get_text(strip=True).strip("()")
         try:
-            time_obj = datetime.strptime(timestamp_text, "%I:%M:%S %p")
-            date_part = self.date_str if self.date_str else "1970-01-01"
-            return f"{date_part}T{time_obj.strftime('%H:%M:%S')}"
+            time_obj = datetime.strptime(time_text, "%I:%M:%S %p")
+            timestamp = f"{self.date_str}T{time_obj.strftime('%H:%M:%S')}"
+            return author, timestamp
         except ValueError:
-            return None
+            return None, None
 
-    def _extract_message(self, span):
+    def _extract_message_a(self, span):
         """
-        Extract the message content, which is a sibling of the <font> tag.
-        :param span: The <span> element containing the message.
-        :return: Extracted message as a string or None if not found.
+        Extract the message using Format A logic.
         """
         font_tags = span.find_all("font")
-        for font in font_tags:
-            if font.attrs.get("face") == "Tahoma" and font.attrs.get("size") == "1":
-                return font.get_text(strip=True)
-        return None
+        if not font_tags:
+            return None
+
+        message_font = font_tags[-1]
+        message = message_font.get_text(strip=True)
+        return message if message and message != ":" else None
+
+    # Format D methods
+    def _extract_author_and_timestamp_d(self, span):
+        """
+        Extract author and timestamp using Format D logic, with handling for malformed timestamps.
+        """
+        # Find the author
+        first_font = span.find(
+            "font",
+            color=lambda value: value and value.lower() in ["#ff0000", "#0000ff"],
+        )
+        if not first_font:
+            return None, None
+
+        author = first_font.get_text(strip=True).split("(")[0].strip()
+
+        # Find the timestamp text
+        time_match = span.find(text=lambda text: text and "(" in text and ")" in text)
+        if not time_match:
+            return None, None
+
+        # Clean the timestamp text
+        time_text = time_match.strip().lstrip("(").rstrip(")")
+        try:
+            # Parse time in 'hh:mm:ss AM/PM' format
+            time_obj = datetime.strptime(time_text, "%I:%M:%S %p")
+            timestamp = f"{self.date_str}T{time_obj.strftime('%H:%M:%S')}"
+            return author, timestamp
+        except ValueError:
+            # Fallback: Normalize and re-parse if parentheses or spaces are mismatched
+            time_text_normalized = time_text.replace("(", "").replace(")", "").strip()
+            try:
+                time_obj = datetime.strptime(time_text_normalized, "%I:%M:%S %p")
+                timestamp = f"{self.date_str}T{time_obj.strftime('%H:%M:%S')}"
+                return author, timestamp
+            except ValueError:
+                return None, None
+
+    def _extract_message_d(self, span):
+        """
+        Extract the message using Format D logic.
+        """
+        font_tags = span.find_all("font")
+        if not font_tags:
+            return None
+
+        message_font = font_tags[-1]
+        message = message_font.get_text(strip=True)
+        return message if message and message != ":" else None
