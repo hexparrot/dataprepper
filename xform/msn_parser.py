@@ -13,7 +13,7 @@ class MsnParser(BaseParser):
     def __init__(self, date_str=""):
         """
         Initialize the parser with an optional date string in 'YYYY-MM-DD' format.
-        If not provided, the date must be extracted from the context or filename.
+        If not provided, the date must be extracted from the <title> tag.
         """
         self.date_str = date_str
 
@@ -25,6 +25,11 @@ class MsnParser(BaseParser):
         """
         soup = BeautifulSoup(html_content, "html.parser")
         raw_records = []
+
+        # Determine the date to use
+        self.date_str = (
+            self._extract_date_from_title(soup) if not self.date_str else self.date_str
+        )
 
         # Find all <font> tags with color attribute indicating message author
         font_tags = soup.find_all("font", color=re.compile(r"^#"))
@@ -59,6 +64,25 @@ class MsnParser(BaseParser):
                 continue
 
         return raw_records
+
+    def _extract_date_from_title(self, soup):
+        """
+        Extract the date from the <title> tag in 'MM/DD/YYYY' format.
+        :param soup: BeautifulSoup object of the HTML content.
+        :return: Date string in 'YYYY-MM-DD' format or None if not found.
+        """
+        title_tag = soup.find("title")
+        if not title_tag:
+            return None
+
+        title_text = title_tag.get_text(strip=True)
+        try:
+            # Extract the date portion from the title
+            date_part = title_text.split(" at ")[1].split(" ")[0]
+            date_obj = datetime.strptime(date_part, "%m/%d/%Y")
+            return date_obj.strftime("%Y-%m-%d")
+        except (IndexError, ValueError):
+            return None
 
     def _extract_timestamp(self, font):
         """
