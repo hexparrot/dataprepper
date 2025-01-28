@@ -18,6 +18,7 @@ from drop_empty_values import DropEmptyValuesPipe
 from drop_invalid_timestamp import VerifyTimestampPipe
 from drop_nonmatching_authors import KeepAuthorsPipe
 from drop_short_messages import FilterByLengthPipe
+from drop_matchword import FilterByWordPipe
 from rewrite_author import RenameAuthorPipe
 from rewrite_author_merge import MergeAuthorsPipe
 from rewrite_author_norm import NormalizeAuthorPipe
@@ -400,6 +401,45 @@ class TestPipes(unittest.TestCase):
 
         # Verify the secondary author count is logged
         self.assertIn("Secondary Authors (e.g., system)", stderr)
+
+    def test_filter_by_word(self):
+        """Test the FilterByWordPipe to drop records with specified words."""
+        words_to_filter = ["hola"]
+
+        stdout, stderr = self.run_parser(
+            FilterByWordPipe, json.dumps(self.test_json), words_to_filter
+        )
+        output = json.loads(stdout)
+
+        self.assertEqual(len(output), 3)
+        self.assertEqual(output[0]["author"], "itsame")
+        self.assertEqual(output[1]["author"], "itsame")
+        self.assertEqual(output[2]["author"], "mario")
+
+    def test_case_insensitivity(self):
+        """Test that filtering is case insensitive."""
+        words_to_filter = ["HOLA"]
+
+        stdout, stderr = self.run_parser(
+            FilterByWordPipe, json.dumps(self.test_json), words_to_filter
+        )
+        output = json.loads(stdout)
+
+        self.assertEqual(len(output), 3)
+        self.assertEqual(output[0]["author"], "itsame")
+        self.assertEqual(output[1]["author"], "itsame")
+        self.assertEqual(output[2]["author"], "mario")
+
+    def test_no_words_filtered(self):
+        """Test that no words filtered results in all records kept."""
+        words_to_filter = []
+
+        stdout, stderr = self.run_parser(
+            FilterByWordPipe, json.dumps(self.test_json), words_to_filter
+        )
+        output = json.loads(stdout)
+
+        self.assertEqual(len(output), len(self.test_json))
 
 
 if __name__ == "__main__":
