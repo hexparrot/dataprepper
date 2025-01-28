@@ -416,6 +416,33 @@ class TestPipes(unittest.TestCase):
         self.assertEqual(output[1]["author"], "itsame")
         self.assertEqual(output[2]["author"], "mario")
 
+        # another example
+        words_to_filter = ["rescuing a"]
+
+        stdout, stderr = self.run_parser(
+            FilterByWordPipe, json.dumps(self.test_json), words_to_filter
+        )
+        output = json.loads(stdout)
+
+        self.assertEqual(len(output), 3)
+        self.assertEqual(output[0]["author"], "itsame")
+        self.assertEqual(output[1]["author"], "mario")
+        self.assertEqual(output[2]["author"], "itsame")
+
+        # another example
+        words_to_filter = ["rescuing a blandosaurus"]
+
+        stdout, stderr = self.run_parser(
+            FilterByWordPipe, json.dumps(self.test_json), words_to_filter
+        )
+        output = json.loads(stdout)
+
+        self.assertEqual(len(output), 4)
+        self.assertEqual(output[0]["author"], "itsame")
+        self.assertEqual(output[1]["author"], "mario")
+        self.assertEqual(output[2]["author"], "itsame")
+        self.assertEqual(output[3]["author"], "mario")
+
     def test_case_insensitivity(self):
         """Test that filtering is case insensitive."""
         words_to_filter = ["HOLA"]
