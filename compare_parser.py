@@ -83,7 +83,7 @@ def compare_parsers(directory, parser1_letter, parser2_letter, date_str="1970-01
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print("Usage: python compare.py <directory> <parser1_letter> <parser2_letter>")
+        print("Usage: ./compare_parser.py <directory> <a|b|c|d> <a|b|c|d>")
         sys.exit(1)
 
     directory = sys.argv[1]
