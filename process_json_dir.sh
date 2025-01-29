@@ -1,22 +1,26 @@
 #!/bin/bash
 
-# Syntax usage information
+# Display usage information if the required arguments are not provided
 if [[ $# -lt 2 ]]; then
-    echo "Usage: $0 <input_directory> <output_directory> [filter_length] [kept_authors] [fields_to_remove]"
+    echo "Usage: $0 <input_directory> <output_directory> [filter_length]"
     echo "  <input_directory>   Directory containing JSON files to process."
     echo "  <output_directory>  Directory where processed files will be saved."
+    echo "  [filter_length]     Minimum message length to retain (default: 80)."
     exit 1
 fi
 
 # Input arguments
-INPUT_DIR=$1
-OUTPUT_DIR=$2
-FILTER_LENGTH=${3:-80}  # Default to 80 if not provided
-KEPT_AUTHORS="me" # example: "someusername,1234567,example@example.com"
-FIELDS_TO_REMOVE="" # example: "timestamp,convo_id,sequence_id"
+INPUT_DIR="$1"
+OUTPUT_DIR="$2"
+FILTER_LENGTH="${3:-80}"  # Default to 80 if not provided
+KEPT_AUTHORS="me"  # Example: "someusername,1234567,example@example.com"
+FIELDS_TO_REMOVE=""  # Example: "timestamp,convo_id,sequence_id"
 
-# Create the output directory if it doesn't exist
-mkdir -p "$OUTPUT_DIR" || { echo "Failed to create output directory: $OUTPUT_DIR"; exit 1; }
+# Ensure the output directory exists
+if ! mkdir -p "$OUTPUT_DIR"; then
+    echo "Error: Failed to create output directory: $OUTPUT_DIR"
+    exit 1
+fi
 
 # Process each JSON file in the input directory
 for json_file in "$INPUT_DIR"/*.json; do
@@ -25,17 +29,17 @@ for json_file in "$INPUT_DIR"/*.json; do
         break
     fi
 
-    # Get the base name of the file
-    base_name=$(basename "$json_file")
+    # Extract the base filename and define the output file path
+    base_name="$(basename "$json_file")"
     output_file="$OUTPUT_DIR/$base_name"
 
     # Process the file
     #
-    # - normalizes names to ascii chars, lower case, whitespace removed
-    # - drops conversations consisting of a single message
-    # - combine all kept authors into "user"
-    # - change newlines to spaces for training continuity
-    # - prune out messages < X length
+    # - Normalize author names to ASCII, lowercase, and remove whitespace
+    # - Drop conversations consisting of a single message
+    # - Merge specified authors into "user"
+    # - Convert newlines to spaces for continuity
+    # - Remove messages shorter than the specified length
     if cat "$json_file" \
         | ./pipes/rewrite_author_norm.py \
         | ./pipes/drop_single_convo.py \
@@ -46,10 +50,11 @@ for json_file in "$INPUT_DIR"/*.json; do
         echo "Processed: $base_name"
     else
         echo "Failed to process: $base_name"
-        # Optional: Remove partial output if the process fails
-        rm -f "$output_file"
+        rm -f "$output_file"  # Remove any partial output if processing fails
     fi
+
 done
 
-# Summary message
-echo "Processing complete. Processed files saved to: $OUTPUT_DIR"
+# Completion message
+echo "Processing complete. Files saved to: $OUTPUT_DIR"
+

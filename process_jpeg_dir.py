@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# process_images.py
 import os
 import sys
 import json
@@ -93,7 +92,7 @@ def process_directory(directory):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python process_images.py <image_directory>")
+        print("Usage: ./process_images.py <image_directory>")
         sys.exit(1)
 
     directory = sys.argv[1]
