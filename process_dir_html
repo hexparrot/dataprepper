@@ -17,7 +17,7 @@ mkdir -p "$OUTPUT_DIR"
 declare -A convo_count
 
 # Process each .htm or .html file in the input directory recursively
-find "$INPUT_DIR" -type f \( -iname '*.htm' -o -iname '*.html' \) -print0 | while IFS= read -r -d '' file; do
+find "$INPUT_DIR" -type f \( -iname '*.htm' -o -iname '*.html' -o -iname '*.json' \) -print0 | while IFS= read -r -d '' file; do
   echo "==========================================="
   echo "Processing: $file"
 
@@ -39,7 +39,7 @@ find "$INPUT_DIR" -type f \( -iname '*.htm' -o -iname '*.html' \) -print0 | whil
   output_file="$OUTPUT_DIR/${recipient}-${date_match}_${convo_label}.json"
 
   # Use parse_html.py as a pipe to process the file
-  if cat "$file" | ./parse_html.py "$date_match" > "$output_file"; then
+  if cat "$file" | ./parse_message "$date_match" > "$output_file"; then
     echo " -> Successfully processed: $file"
     echo " -> Output written to: $output_file"
   else
@@ -51,7 +51,7 @@ find "$INPUT_DIR" -type f \( -iname '*.htm' -o -iname '*.html' \) -print0 | whil
 done
 
 echo "==========================================="
-echo "All .htm and .html files have been processed."
+echo "All .json, .htm, and .html files have been processed."
 echo "Output files are in '$OUTPUT_DIR'"
 echo "==========================================="
 
