@@ -5,7 +5,7 @@ import re
 from xform.base_parser import BaseParser
 
 
-class GchatParser(BaseParser):
+class GvoiceParser(BaseParser):
     """
     Parser for chat logs with the 'hChatLog hfeed' structure.
     Extracts timestamps, authors (by phone number), and messages.

@@ -4,7 +4,7 @@ import json
 from xform.aimlogs_parser import AimLogsParser
 from xform.fbchat_parser import FbchatParser
 from xform.msn_parser import MsnParser
-from xform.gchat_parser import GchatParser
+from xform.gvoice_parser import GvoiceParser
 from xform.format_a_parser import FormatAParser
 from xform.format_b_parser import FormatBParser
 from xform.format_c_parser import FormatCParser
@@ -41,7 +41,7 @@ def main():
         "AimLogs": AimLogsParser(date_str=date_str),
         "Fbchat": FbchatParser(),
         "Msn": MsnParser(),
-        "Gchat": GchatParser(),
+        "Gvoice": GvoiceParser(),
         # "FormatA": FormatAParser(),
         # "FormatB": FormatBParser(),
         # "FormatC": FormatCParser(date_str=date_str),
