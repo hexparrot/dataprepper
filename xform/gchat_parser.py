@@ -53,11 +53,11 @@ class GchatParser(BaseParser):
                     )
 
                 except Exception as e:
-                    print(f"[DEBUG] Error parsing message: {e}")
+                    # print(f"[DEBUG] Error parsing message: {e}")
                     continue  # Skip malformed messages
 
         except json.JSONDecodeError:
-            print("[ERROR] Failed to parse JSON input.")
+            pass  # print("[ERROR] Failed to parse JSON input.")
 
         return messages
 

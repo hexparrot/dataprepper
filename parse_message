@@ -14,14 +14,29 @@ from xform.format_d_parser import FormatDParser
 
 def main():
     """
-    Main function to parse HTML input using multiple parsers, select the best output, and report results.
+    Main function to parse messages from either HTML or JSON input.
+    - If `--json` is provided, only JSON parsers are used.
+    - If `--html` is provided, only HTML parsers are used.
+    - If **no flag** is provided, **all parsers** are used, and the best-performing one is selected.
     """
-    # Extract optional command-line argument for date
-    if len(sys.argv) > 2:
-        print("Usage: ./parse_html.py [YYYY-MM-DD]", file=sys.stderr)
-        sys.exit(1)
 
-    date_str = sys.argv[1] if len(sys.argv) == 2 else "1970-01-01"
+    # Validate command-line arguments
+    valid_flags = {"--json", "--html"}
+    input_type = None
+    date_str = "1970-01-01"
+
+    if len(sys.argv) > 1:
+        if sys.argv[1] in valid_flags:
+            input_type = sys.argv[1]
+            if len(sys.argv) == 3:
+                date_str = sys.argv[2]
+        elif len(sys.argv) == 2:
+            date_str = sys.argv[1]
+        else:
+            print(
+                "Usage: ./parse_message [--json | --html] [YYYY-MM-DD]", file=sys.stderr
+            )
+            sys.exit(1)
 
     # Validate the date format if provided
     if len(date_str) != 10 or not (
@@ -34,46 +49,58 @@ def main():
         print("Invalid date format. Use YYYY-MM-DD.", file=sys.stderr)
         sys.exit(1)
 
-    # Read HTML content from stdin
-    html_content = sys.stdin.read()
+    # Read content from stdin
+    raw_content = sys.stdin.read().strip()
 
-    # Initialize all available parsers with the provided or default date
-    parsers = {
+    # Initialize JSON and HTML parsers
+    json_parsers = {
+        "Gchat": GchatParser(),
+    }
+
+    html_parsers = {
         "AimLogs": AimLogsParser(date_str=date_str),
         "Fbchat": FbchatParser(),
         "Msn": MsnParser(),
         "Gvoice": GvoiceParser(),
-        "Gchat": GchatParser(),
         # "FormatA": FormatAParser(),
         # "FormatB": FormatBParser(),
         # "FormatC": FormatCParser(date_str=date_str),
         # "FormatD": FormatDParser(date_str=date_str),
     }
 
+    # Determine which parsers to run
+    if input_type == "--json":
+        selected_parsers = json_parsers
+    elif input_type == "--html":
+        selected_parsers = html_parsers
+    else:
+        selected_parsers = {**json_parsers, **html_parsers}  # Run all parsers
+
     best_parser = None
     best_records = []
     parser_performance = {}
 
-    # Iterate through all parsers and evaluate performance
-    for parser_name, parser in parsers.items():
+    # Attempt to parse with the appropriate parsers
+    for parser_name, parser in selected_parsers.items():
         try:
-            # Parse the HTML content with the current parser
-            records = parser.parse(html_content)
+            if input_type == "--json" or (
+                input_type is None and raw_content.startswith("{")
+            ):
+                records = parser.parse(raw_content)
+            else:
+                records = parser.parse(raw_content)
 
-            # Log the number of records parsed
             parser_performance[parser_name] = len(records)
 
-            # Update the best parser if this one has more records
             if len(records) > len(best_records):
                 best_parser = parser_name
                 best_records = records
 
         except Exception as e:
-            # Log parser errors to stderr
             print(f"Error with {parser_name}: {e}", file=sys.stderr)
-            parser_performance[parser_name] = 0  # No records parsed due to error
+            parser_performance[parser_name] = 0
 
-    # Output the parsed records using the best parser to stdout
+    # Output parsed records in standard format
     print(json.dumps(best_records, indent=4))
 
     # Report parser performance and chosen parser to stderr
