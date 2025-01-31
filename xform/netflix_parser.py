@@ -54,7 +54,7 @@ class NetflixParser(BaseParser):
                 records.append(record)
 
             except Exception as e:
-                print(f"[ERROR] Error parsing entry: {e}", file=sys.stderr)
+                # print(f"[ERROR] Error parsing entry: {e}", file=sys.stderr)
                 continue
 
         return records
