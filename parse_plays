@@ -2,6 +2,7 @@
 import sys
 import json
 from xform.youtube_parser import YouTubeParser
+from xform.netflix_parser import NetflixParser
 from xform.format_a_parser import FormatAParser
 from xform.format_b_parser import FormatBParser
 from xform.format_c_parser import FormatCParser
@@ -10,14 +11,15 @@ from xform.format_d_parser import FormatDParser
 
 def main():
     """
-    Main function to parse messages from either HTML or JSON input.
+    Main function to parse messages from either HTML, JSON, or CSV input.
     - If `--json` is provided, only JSON parsers are used.
     - If `--html` is provided, only HTML parsers are used.
+    - If `--csv` is provided, only CSV parsers are used.
     - If **no flag** is provided, **all parsers** are used, and the best-performing one is selected.
     """
 
     # Validate command-line arguments
-    valid_flags = {"--json", "--html"}
+    valid_flags = {"--json", "--html", "--csv"}
     input_type = None
     date_str = "1970-01-01"
 
@@ -30,7 +32,8 @@ def main():
             date_str = sys.argv[1]
         else:
             print(
-                "Usage: ./parse_message [--json | --html] [YYYY-MM-DD]", file=sys.stderr
+                "Usage: ./parse_plays [--json | --html | --csv] [YYYY-MM-DD]",
+                file=sys.stderr,
             )
             sys.exit(1)
 
@@ -48,26 +51,33 @@ def main():
     # Read content from stdin
     raw_content = sys.stdin.read().strip()
 
-    # Initialize JSON and HTML parsers
+    # Initialize JSON, HTML, and CSV parsers
     json_parsers = {
-        # "Gchat": GchatParser(),
+        # Add any JSON-based parsers here
     }
 
     html_parsers = {
         "YouTube": YouTubeParser(),
-        # "FormatA": FormatAParser(),
-        # "FormatB": FormatBParser(),
-        # "FormatC": FormatCParser(date_str=date_str),
-        # "FormatD": FormatDParser(date_str=date_str),
+        # Add other HTML parsers if necessary
     }
 
-    # Determine which parsers to run
+    csv_parsers = {
+        "Netflix": NetflixParser(),
+    }
+
+    # Determine which parsers to run based on flag
     if input_type == "--json":
         selected_parsers = json_parsers
     elif input_type == "--html":
         selected_parsers = html_parsers
+    elif input_type == "--csv":
+        selected_parsers = csv_parsers
     else:
-        selected_parsers = {**json_parsers, **html_parsers}  # Run all parsers
+        selected_parsers = {
+            **json_parsers,
+            **html_parsers,
+            **csv_parsers,
+        }  # Run all parsers
 
     best_parser = None
     best_records = []
@@ -76,12 +86,7 @@ def main():
     # Attempt to parse with the appropriate parsers
     for parser_name, parser in selected_parsers.items():
         try:
-            if input_type == "--json" or (
-                input_type is None and raw_content.startswith("{")
-            ):
-                records = parser.parse(raw_content)
-            else:
-                records = parser.parse(raw_content)
+            records = parser.parse(raw_content)
 
             parser_performance[parser_name] = len(records)
 

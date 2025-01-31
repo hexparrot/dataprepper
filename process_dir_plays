@@ -16,23 +16,25 @@ mkdir -p "$OUTPUT_DIR"
 # Declare a counter to track processed files
 declare -i file_count=0
 
-# Process each .htm, .html, or .json file in the input directory recursively
-find "$INPUT_DIR" -type f \( -iname '*.htm' -o -iname '*.html' -o -iname '*.json' \) -print0 | while IFS= read -r -d '' file; do
+# Process each .htm, .html, .json, or .csv file in the input directory recursively
+find "$INPUT_DIR" -type f \( -iname '*.htm' -o -iname '*.html' -o -iname '*.json' -o -iname '*.csv' \) -print0 | while IFS= read -r -d '' file; do
   echo "==========================================="
   echo "Processing: $file"
 
-  # Determine file type and corresponding flag for `parse_message`
+  # Determine file type and corresponding flag for `parse_plays`
   if [[ "$file" == *.json ]]; then
     parse_flag="--json"
+  elif [[ "$file" == *.csv ]]; then
+    parse_flag="--csv"
   else
     parse_flag="--html"
   fi
 
   # Generate a unique output file name
-  output_file="$OUTPUT_DIR/yt-$(printf "%03d" "$file_count").json"
+  output_file="$OUTPUT_DIR/plays-$(printf "%03d" "$file_count").json"
   file_count+=1  # Increment after assigning filename
 
-  # Use parse_message.py with the correct flag
+  # Use parse_plays with the correct flag
   if cat "$file" | ./parse_plays "$parse_flag" > "$output_file"; then
     echo " -> Successfully processed: $file"
     echo " -> Output written to: $output_file"
@@ -45,7 +47,7 @@ find "$INPUT_DIR" -type f \( -iname '*.htm' -o -iname '*.html' -o -iname '*.json
 done
 
 echo "==========================================="
-echo "All .json, .htm, and .html files have been processed."
+echo "All .json, .htm, .html, and .csv files have been processed."
 echo "Output files are in '$OUTPUT_DIR'"
 echo "==========================================="
 
