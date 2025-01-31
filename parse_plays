@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import json
-from xform.yt_parser import YtParser
+from xform.youtube_parser import YouTubeParser
 from xform.format_a_parser import FormatAParser
 from xform.format_b_parser import FormatBParser
 from xform.format_c_parser import FormatCParser
@@ -54,7 +54,7 @@ def main():
     }
 
     html_parsers = {
-        "Yt": YtParser(),
+        "YouTube": YouTubeParser(),
         # "FormatA": FormatAParser(),
         # "FormatB": FormatBParser(),
         # "FormatC": FormatCParser(date_str=date_str),
