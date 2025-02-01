@@ -17,7 +17,7 @@ mkdir -p "$OUTPUT_DIR"
 declare -i file_count=0
 
 # Process each .htm, .html, .json, or .csv file in the input directory recursively
-find "$INPUT_DIR" -type f \( -iname '*.htm' -o -iname '*.html' -o -iname '*.json' -o -iname '*.csv' \) -print0 | while IFS= read -r -d '' file; do
+find "$INPUT_DIR" -type f \( -iname '*.htm' -o -iname '*.html' -o -iname '*.json' -o -iname '*.csv' -o -iname '*.xml' \) -print0 | while IFS= read -r -d '' file; do
   echo "==========================================="
   echo "Processing: $file"
 
@@ -26,6 +26,8 @@ find "$INPUT_DIR" -type f \( -iname '*.htm' -o -iname '*.html' -o -iname '*.json
     parse_flag="--json"
   elif [[ "$file" == *.csv ]]; then
     parse_flag="--csv"
+  elif [[ "$file" == *.xml ]]; then
+    parse_flag="--xml"
   else
     parse_flag="--html"
   fi

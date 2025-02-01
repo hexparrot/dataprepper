@@ -8,19 +8,22 @@ from xform.format_a_parser import FormatAParser
 from xform.format_b_parser import FormatBParser
 from xform.format_c_parser import FormatCParser
 from xform.format_d_parser import FormatDParser
+from xform.myanimelist_parser import MyAnimeListParser
+import xml.etree.ElementTree as ET
 
 
 def main():
     """
-    Main function to parse messages from either HTML, JSON, or CSV input.
+    Main function to parse messages from either HTML, JSON, CSV, or XML input.
     - If `--json` is provided, only JSON parsers are used.
     - If `--html` is provided, only HTML parsers are used.
     - If `--csv` is provided, only CSV parsers are used.
+    - If `--xml` is provided, only XML parsers are used.
     - If **no flag** is provided, **all parsers** are used, and the best-performing one is selected.
     """
 
     # Validate command-line arguments
-    valid_flags = {"--json", "--html", "--csv"}
+    valid_flags = {"--json", "--html", "--csv", "--xml"}
     input_type = None
     date_str = "1970-01-01"
 
@@ -33,7 +36,7 @@ def main():
             date_str = sys.argv[1]
         else:
             print(
-                "Usage: ./parse_plays [--json | --html | --csv] [YYYY-MM-DD]",
+                "Usage: ./parse_plays [--json | --html | --csv | --xml] [YYYY-MM-DD]",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -52,7 +55,7 @@ def main():
     # Read content from stdin
     raw_content = sys.stdin.read().strip()
 
-    # Initialize JSON, HTML, and CSV parsers
+    # Initialize JSON, HTML, CSV, and XML parsers
     json_parsers = {
         # Add any JSON-based parsers here
     }
@@ -67,6 +70,10 @@ def main():
         "NetflixGames": NetflixGamesParser(),
     }
 
+    xml_parsers = {
+        "MyAnimeList": MyAnimeListParser(),
+    }
+
     # Determine which parsers to run based on flag
     if input_type == "--json":
         selected_parsers = json_parsers
@@ -74,11 +81,14 @@ def main():
         selected_parsers = html_parsers
     elif input_type == "--csv":
         selected_parsers = csv_parsers
+    elif input_type == "--xml":
+        selected_parsers = xml_parsers
     else:
         selected_parsers = {
             **json_parsers,
             **html_parsers,
             **csv_parsers,
+            **xml_parsers,
         }  # Run all parsers
 
     best_parser = None
