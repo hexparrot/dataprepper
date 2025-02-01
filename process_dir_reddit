@@ -1,0 +1,63 @@
+import sys
+import os
+import json
+from xform.reddit_parser import (
+    RedditStatisticsParser,
+    RedditCommentHeadersParser,
+    RedditPostsHeadersParser,
+    RedditCommentsParser,
+    RedditPostsParser
+)
+
+def process_reddit_directory(data_dir: str):
+    """
+    Process the Reddit export directory, parse relevant files, and output structured JSON.
+    """
+    if not os.path.isdir(data_dir):
+        print(f"[ERROR] Directory not found: {data_dir}", file=sys.stderr)
+        sys.exit(1)
+    
+    # Define file paths
+    statistics_file = os.path.join(data_dir, "statistics.csv")
+    comments_file = os.path.join(data_dir, "comments.csv")
+    posts_file = os.path.join(data_dir, "posts.csv")
+    comment_headers_file = os.path.join(data_dir, "comment_headers.csv")
+    post_headers_file = os.path.join(data_dir, "post_headers.csv")
+    
+    # Extract username
+    username = RedditStatisticsParser.parse(statistics_file)
+    
+    # Load headers
+    comment_headers = RedditCommentHeadersParser.parse(comment_headers_file) if os.path.exists(comment_headers_file) else {}
+    post_headers = RedditPostsHeadersParser.parse(post_headers_file) if os.path.exists(post_headers_file) else {}
+    
+    # Parse comments
+    comments_parser = RedditCommentsParser(username, comment_headers)
+    comments_data = comments_parser.parse(comments_file) if os.path.exists(comments_file) else []
+    
+    # Parse posts
+    posts_parser = RedditPostsParser(username, post_headers)
+    posts_data = posts_parser.parse(posts_file) if os.path.exists(posts_file) else []
+    
+    # Combine all records into a single timeline
+    timeline = comments_data + posts_data
+    
+    # Output structured timeline
+    print(json.dumps(timeline, indent=4))
+    
+
+def main():
+    """
+    Entry point for processing Reddit directory.
+    """
+    if len(sys.argv) < 2:
+        print("Usage: python process_dir_reddit.py <reddit_data_directory>", file=sys.stderr)
+        sys.exit(1)
+    
+    data_dir = sys.argv[1]
+    process_reddit_directory(data_dir)
+    
+
+if __name__ == "__main__":
+    main()
+
