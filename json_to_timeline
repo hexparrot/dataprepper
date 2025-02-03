@@ -61,19 +61,17 @@ def load_events(file_path):
 def main():
     """
     Usage:
-      ./process_userdata_purposebuilt <subdir_name>
+      ./json_to_timeline <directory_path>
 
-    Where subdir_name is something like "piped" or "attempt_001".
-    We'll look in: userdata/purposebuilt/<subdir_name> for JSON files,
-    then output a combined, sorted timeline to stdout.
+    Recursively finds .json files in <directory_path>, combines them into a single
+    timeline (sorted by timestamp), then prints the result to stdout as JSON.
     """
 
     if len(sys.argv) < 2:
-        print("Usage: ./process_userdata_purposebuilt <subdir_name>", file=sys.stderr)
+        print("Usage: ./json_to_timeline <directory_path>", file=sys.stderr)
         sys.exit(1)
 
-    subdir_name = sys.argv[1]
-    base_dir = os.path.join("userdata", "purposebuilt", subdir_name)
+    base_dir = sys.argv[1]
 
     if not os.path.isdir(base_dir):
         print(f"[ERROR] Directory not found: {base_dir}", file=sys.stderr)
@@ -95,7 +93,7 @@ def main():
     json.dump(all_events, sys.stdout, indent=4)
     print()  # newline after JSON
 
-    # Log to stderr
+    # Log summary to stderr
     print(
         f"\n✅ Global chronological timeline built from: '{base_dir}'",
         file=sys.stderr,

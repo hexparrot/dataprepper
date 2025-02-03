@@ -12,7 +12,7 @@
 set -e  # Exit on first error
 
 # 1) Decide on subdir name under "userdata/purposebuilt"
-PURPOSE_SUBDIR="${1:-piped}"
+PURPOSE_SUBDIR="${1:-output}"
 
 KEPT_AUTHORS="me,unspecified"
 BASE_TRANSFORMED="userdata/transformed"
