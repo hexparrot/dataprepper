@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+
+import os
+import json
+import sys
+from datetime import datetime, timezone
+from dateutil import parser as date_parser
+
+
+def parse_timestamp(ts):
+    """
+    Uses dateutil.parser to handle multiple formats.
+    Then converts to UTC, drops tzinfo (making it a naive datetime).
+    """
+    try:
+        dt = date_parser.parse(ts)
+        # Convert to UTC, strip tzinfo
+        dt_utc_naive = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt_utc_naive
+    except (ValueError, TypeError):
+        # fallback parse or default
+        return datetime(1970, 1, 1)
+
+
+def load_events(file_path):
+    """
+    Attempt to extract {timestamp, author, message} from each record in the file.
+    Fallback for images if "DateTime" is present.
+    """
+    events = []
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # If the JSON is a single dict, wrap it into a list
+        if isinstance(data, dict):
+            data = [data]
+
+        for record in data:
+            ts = record.get("timestamp")
+            if not ts and "DateTime" in record:
+                ts = record["DateTime"]
+
+            # If no usable timestamp, skip
+            if not ts:
+                continue
+
+            event = {
+                "timestamp": ts,
+                "author": record.get("author", "unspecified"),
+                "message": record.get("message", "No message"),
+                "source": os.path.basename(file_path),
+            }
+            events.append(event)
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"[WARNING] Failed to parse {file_path}: {e}", file=sys.stderr)
+
+    return events
+
+
+def main():
+    """
+    Usage:
+      ./process_userdata_purposebuilt <subdir_name>
+
+    Where subdir_name is something like "piped" or "attempt_001".
+    We'll look in: userdata/purposebuilt/<subdir_name> for JSON files,
+    then output a combined, sorted timeline to stdout.
+    """
+
+    if len(sys.argv) < 2:
+        print("Usage: ./process_userdata_purposebuilt <subdir_name>", file=sys.stderr)
+        sys.exit(1)
+
+    subdir_name = sys.argv[1]
+    base_dir = os.path.join("userdata", "purposebuilt", subdir_name)
+
+    if not os.path.isdir(base_dir):
+        print(f"[ERROR] Directory not found: {base_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    # Collect all events
+    all_events = []
+    for root, _, files in os.walk(base_dir):
+        for fname in files:
+            if fname.lower().endswith(".json"):
+                full_path = os.path.join(root, fname)
+                file_events = load_events(full_path)
+                all_events.extend(file_events)
+
+    # Sort globally by parsed timestamp
+    all_events.sort(key=lambda e: parse_timestamp(e["timestamp"]))
+
+    # Print final timeline as JSON to stdout
+    json.dump(all_events, sys.stdout, indent=4)
+    print()  # newline after JSON
+
+    # Log to stderr
+    print(
+        f"\n✅ Global chronological timeline built from: '{base_dir}'",
+        file=sys.stderr,
+    )
+    print(f"Total events: {len(all_events)}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
