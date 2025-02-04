@@ -49,7 +49,7 @@ class AimLogs2Parser(BaseParser):
                     )
 
             else:
-                print(f"[DEBUG] Skipping unrecognized span: {text}")
+                pass  # print(f"[DEBUG] Skipping unrecognized span: {text}")
 
         return raw_records
 
