@@ -11,6 +11,7 @@ from structs.base_record import BaseRecord
 
 # Import all chat parsers
 from xform.aimlogs_parser import AimLogsParser
+from xform.aimlogs2_parser import AimLogs2Parser
 from xform.fbchat_parser import FbchatParser
 from xform.msn_parser import MsnParser
 from xform.gvoice_parser import GvoiceParser
@@ -110,6 +111,9 @@ class ChatRecord(BaseRecord):
         }
         html_parsers = {
             "AimLogsParser": AimLogsParser(
+                date_str=filename_date
+            ),  # Pass filename date
+            "AimLogs2Parser": AimLogs2Parser(
                 date_str=filename_date
             ),  # Pass filename date
             "FbchatParser": FbchatParser(),
