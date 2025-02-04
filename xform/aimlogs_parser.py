@@ -8,11 +8,12 @@ class AimLogsParser(BaseParser):
     Combined parser for multiple AIM client formats
     """
 
-    def __init__(self, date_str="1970-01-01"):
+    def __init__(self, date_str=None):
         """
-        Initialize the parser with the date string in 'YYYY-MM-DD' format.
+        Initialize the parser with the provided date string in 'YYYY-MM-DD' format.
+        If no date is provided, default to '1970-01-01'.
         """
-        self.date_str = date_str
+        self.date_str = date_str if date_str else "1970-01-01"  # ✅ Use provided date
 
     def _extract_records(self, html_content: str) -> list[dict]:
         """
@@ -85,7 +86,7 @@ class AimLogsParser(BaseParser):
         time_text = time_span.get_text(strip=True).strip("()")
         try:
             time_obj = datetime.strptime(time_text, "%I:%M:%S %p")
-            timestamp = f"{self.date_str}T{time_obj.strftime('%H:%M:%S')}"
+            timestamp = f"{self.date_str}T{time_obj.strftime('%H:%M:%S')}"  # ✅ Uses extracted date
             return author, timestamp
         except ValueError:
             return None, None
@@ -107,7 +108,6 @@ class AimLogsParser(BaseParser):
         """
         Extract author and timestamp using Format D logic, with handling for malformed timestamps.
         """
-        # Find the author
         first_font = span.find(
             "font",
             color=lambda value: value and value.lower() in ["#ff0000", "#0000ff"],
@@ -117,24 +117,20 @@ class AimLogsParser(BaseParser):
 
         author = first_font.get_text(strip=True).split("(")[0].strip()
 
-        # Find the timestamp text
         time_match = span.find(text=lambda text: text and "(" in text and ")" in text)
         if not time_match:
             return None, None
 
-        # Clean the timestamp text
         time_text = time_match.strip().lstrip("(").rstrip(")")
         try:
-            # Parse time in 'hh:mm:ss AM/PM' format
             time_obj = datetime.strptime(time_text, "%I:%M:%S %p")
-            timestamp = f"{self.date_str}T{time_obj.strftime('%H:%M:%S')}"
+            timestamp = f"{self.date_str}T{time_obj.strftime('%H:%M:%S')}"  # ✅ Uses extracted date
             return author, timestamp
         except ValueError:
-            # Fallback: Normalize and re-parse if parentheses or spaces are mismatched
             time_text_normalized = time_text.replace("(", "").replace(")", "").strip()
             try:
                 time_obj = datetime.strptime(time_text_normalized, "%I:%M:%S %p")
-                timestamp = f"{self.date_str}T{time_obj.strftime('%H:%M:%S')}"
+                timestamp = f"{self.date_str}T{time_obj.strftime('%H:%M:%S')}"  # ✅ Uses extracted date
                 return author, timestamp
             except ValueError:
                 return None, None
