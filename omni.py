@@ -278,6 +278,26 @@ def parse_reddit(raw_dir, transformed_dir):
     )
 
 
+def parse_lyft(raw_dir, transformed_dir):
+    """
+    Processes Netflix CSV data stored in `raw_dir`.
+    - Traverses all subdirectories within `raw_dir`
+    - Converts each CSV file into JSON
+    - Saves the output in `transformed_dir`
+    """
+    if not os.path.exists(raw_dir):
+        logging.error(f"The directory {raw_dir} does not exist.")
+        return
+
+    logging.info(f"Processing Lyft CSV data in {raw_dir}...")
+
+    # Invoke CSV processing with the transformed directory
+    record_handler = CSVRecord(raw_dir, transformed_dir)
+    record_handler.process_directory()
+
+    logging.info(f"Lyft CSV processing complete. JSON files saved in {transformed_dir}")
+
+
 def parse_youtube(raw_dir, transformed_dir):
     """
     Parses YouTube watch history from raw_dir and writes structured JSON to transformed_dir.
@@ -306,6 +326,7 @@ PARSERS = {
     "chat": parse_chat,
     "images": parse_images,
     "myanimelist": parse_myanimelist,
+    "lyft": parse_lyft,
     "reddit": parse_reddit,
     "youtube": parse_youtube,
 }
