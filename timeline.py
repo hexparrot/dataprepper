@@ -104,7 +104,7 @@ def extract_exif_gps(entry, file_path):
         extracted_records.append(
             {
                 "author": "unspecified",
-                "detail": "Taking picture",
+                "detail": entry.get("detail", "Taking picture"),
                 "latitude": float(lat),
                 "longitude": float(lon),
                 "timestamp": timestamp,
