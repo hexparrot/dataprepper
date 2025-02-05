@@ -2,11 +2,17 @@
 
 import os
 import json
+import logging
 from datetime import datetime
-
 import exifread  # pip install exifread
 
 from structs.base_record import BaseRecord  # Adjust import as needed
+
+# Configure logging for debugging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 
 class ExifRecord(BaseRecord):
@@ -32,14 +38,16 @@ class ExifRecord(BaseRecord):
         self._fields with *all* EXIF tags. Also set the required
         fields:
           - author: Default "unspecified"
-          - timestamp: From EXIF DateTimeOriginal (ISO8601, no timezone if present)
+          - timestamp: From EXIF DateTimeOriginal (ISO8601 format)
           - detail: "Picture taken by <make> <model> at <timestamp>"
           - filepath: Relative path of the image from `userdata/raw/images/`
-
-        :param file_path: Path to the JPEG image to parse.
         """
         if not os.path.isfile(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
+            logging.warning(f"File not found: {file_path}")
+            return None
+
+        # Clear previous file data to prevent carryover issues
+        self._fields = {}
 
         with open(file_path, "rb") as f:
             tags = exifread.process_file(f, details=False)
@@ -48,13 +56,11 @@ class ExifRecord(BaseRecord):
         for tag_name, tag_value in tags.items():
             self.set_field(tag_name, str(tag_value))
 
-        # Attempt to get "Make" and "Model" from EXIF if available;
+        # Attempt to get "Make" and "Model" from EXIF if available
         make_tag = str(tags.get("Image Make", "UnknownMake"))
         model_tag = str(tags.get("Image Model", "UnknownModel"))
 
         # Attempt to parse the date/time the picture was taken
-        # (e.g., "EXIF DateTimeOriginal": "YYYY:MM:DD HH:MM:SS").
-        # Convert that to ISO8601 format (no timezone).
         exif_dt = tags.get("EXIF DateTimeOriginal", None)
         iso_timestamp = ""
         if exif_dt:
@@ -63,15 +69,21 @@ class ExifRecord(BaseRecord):
                 dt_obj = datetime.strptime(dt_str, "%Y:%m:%d %H:%M:%S")
                 iso_timestamp = dt_obj.strftime("%Y-%m-%dT%H:%M:%S")
             except ValueError:
-                pass  # Leave blank if parsing fails
+                logging.warning(f"Failed to parse EXIF timestamp: {dt_str}")
 
         # Compute the relative path from `userdata/raw/images`
         relative_path = os.path.relpath(file_path, self.base_image_dir)
 
-        # Now set the required fields:
+        # Set required fields, ensuring each file gets unique values
         self.set_field("author", "unspecified")
         self.set_field("timestamp", iso_timestamp)
         self.set_field(
             "detail", f"Picture taken by {make_tag} {model_tag} at {iso_timestamp}"
         )
         self.set_field("filepath", relative_path)  # Store relative file path
+
+        logging.info(
+            f"Processed {file_path} - Timestamp: {iso_timestamp}, Make: {make_tag}, Model: {model_tag}"
+        )
+
+        return self._fields  # Return extracted data as a dictionary for external use
