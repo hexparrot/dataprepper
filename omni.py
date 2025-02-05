@@ -20,6 +20,7 @@ from structs.exif_extractor import ExifRecord
 from structs.chat_record import ChatRecord
 from structs.myanimelist_record import MyAnimeListRecord
 from structs.youtube_record import YouTubeRecord
+from structs.csv_record import CSVRecord
 
 # Configure logging to stderr
 logging.basicConfig(
@@ -257,11 +258,24 @@ def parse_myanimelist(raw_dir, transformed_dir):
 
 def parse_reddit(raw_dir, transformed_dir):
     """
-    Placeholder function for parsing Reddit data from raw_dir,
-    writing JSON to transformed_dir.
+    Processes Netflix CSV data stored in `raw_dir`.
+    - Traverses all subdirectories within `raw_dir`
+    - Converts each CSV file into JSON
+    - Saves the output in `transformed_dir`
     """
-    logging.info(f"Stub parse_reddit() called for: {raw_dir}")
-    pass
+    if not os.path.exists(raw_dir):
+        logging.error(f"The directory {raw_dir} does not exist.")
+        return
+
+    logging.info(f"Processing Netflix CSV data in {raw_dir}...")
+
+    # Invoke CSV processing with the transformed directory
+    record_handler = CSVRecord(raw_dir, transformed_dir)
+    record_handler.process_directory()
+
+    logging.info(
+        f"Netflix CSV processing complete. JSON files saved in {transformed_dir}"
+    )
 
 
 def parse_youtube(raw_dir, transformed_dir):
@@ -278,7 +292,7 @@ def parse_youtube(raw_dir, transformed_dir):
         for filename in files:
             file_path = os.path.join(root, filename)
 
-            if filename.endswith(".html"):  # ✅ Only process HTML files
+            if filename.endswith(".html"):  # Only process HTML files
                 records = YouTubeRecord.parse_file(file_path)
                 all_records.extend(records)
 
