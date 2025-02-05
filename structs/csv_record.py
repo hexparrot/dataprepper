@@ -73,7 +73,9 @@ class CSVRecord(BaseRecord):
         file_count = 0
         for root, _, files in os.walk(self.input_dir):
             for file in files:
-                if file.endswith(".csv"):  # Process only CSV files
+                if file.endswith(".csv") or file.endswith(
+                    ".tsv"
+                ):  # Process CSV,TSV files
                     file_count += 1
                     csv_path = os.path.join(root, file)
 

@@ -305,6 +305,7 @@ PARSERS = {
     "images": parse_images,
     "myanimelist": parse_myanimelist,
     "lyft": parse_csv,
+    "niantic": parse_csv,
     "reddit": parse_csv,
     "youtube": parse_youtube,
 }
