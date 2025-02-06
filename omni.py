@@ -21,6 +21,7 @@ from structs.chat_record import ChatRecord
 from structs.myanimelist_record import MyAnimeListRecord
 from structs.youtube_record import YouTubeRecord
 from structs.csv_record import CSVRecord
+from structs.csv_record import WazeCSVRecord
 
 # Configure logging to stderr
 logging.basicConfig(
@@ -276,6 +277,26 @@ def parse_csv(raw_dir, transformed_dir):
     logging.info(f"CSV processing complete. JSON files saved in {transformed_dir}")
 
 
+def parse_waze(raw_dir, transformed_dir):
+    """
+    Processes CSV data stored in `raw_dir`.
+    - Traverses all subdirectories within `raw_dir`
+    - Converts each CSV file into JSON
+    - Saves the output in `transformed_dir`
+    """
+    if not os.path.exists(raw_dir):
+        logging.error(f"The directory {raw_dir} does not exist.")
+        return
+
+    logging.info(f"Processing CSV data in {raw_dir}...")
+
+    # Invoke CSV processing with the transformed directory
+    record_handler = WazeCSVRecord(raw_dir, transformed_dir)
+    record_handler.process_directory()
+
+    logging.info(f"CSV processing complete. JSON files saved in {transformed_dir}")
+
+
 def parse_youtube(raw_dir, transformed_dir):
     """
     Parses YouTube watch history from raw_dir and writes structured JSON to transformed_dir.
@@ -308,6 +329,7 @@ PARSERS = {
     "niantic": parse_csv,
     "reddit": parse_csv,
     "youtube": parse_youtube,
+    "waze": parse_waze,
 }
 
 

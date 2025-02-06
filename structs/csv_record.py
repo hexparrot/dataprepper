@@ -96,3 +96,107 @@ class CSVRecord(BaseRecord):
             logging.info(
                 f"Successfully processed {file_count} CSV files in {self.input_dir}"
             )
+
+
+class WazeCSVRecord(CSVRecord):
+    """
+    A specialized CSV parser for Waze artificial CSVs.
+    """
+
+    def __init__(self, input_dir: str, output_dir: str):
+        super().__init__(input_dir, output_dir)
+        self.input_dir = os.path.abspath(input_dir)
+        self.output_root = os.path.abspath(output_dir)
+        os.makedirs(self.output_root, exist_ok=True)
+
+    def process_waze_csv(self):
+        """
+        Processes a Waze CSV file by splitting stanzas and processing each as an independent CSV.
+        """
+        stanzas = self._split_stanzas()
+
+        for stanza_name, stanza_data in stanzas.items():
+            logging.info(f"Processing Waze stanza: {stanza_name}")
+
+            temp_csv_path = os.path.join(self.output_root, f"{stanza_name}.csv")
+            json_path = os.path.join(self.output_root, f"{stanza_name}.json")
+
+            try:
+                # Save stanza data as a valid CSV
+                with open(temp_csv_path, "w", encoding="utf-8") as temp_csv:
+                    temp_csv.write("\n".join(stanza_data))
+
+                # Use existing CSV processing method
+                self.process_csv_file(temp_csv_path, json_path)
+
+                # Remove temporary CSV
+                os.remove(temp_csv_path)
+
+            except Exception as e:
+                logging.error(f"Failed to process stanza {stanza_name}: {e}")
+
+    def _split_stanzas(self):
+        """
+        Splits the artificial Waze CSV file into separate stanzas.
+        :return: Dictionary with {stanza_name: list_of_csv_lines}
+        """
+        logging.info(f"Splitting artificial CSV into stanzas: {self.input_file}")
+
+        stanzas = {}
+        current_stanza_name = None
+        current_stanza_data = []
+
+        with open(self.input_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+
+                if not line:  # Blank line indicates end of a stanza
+                    if current_stanza_name and current_stanza_data:
+                        stanzas[current_stanza_name] = current_stanza_data
+                    current_stanza_name = None
+                    current_stanza_data = []
+                    continue
+
+                if current_stanza_name is None:  # First line is the stanza name
+                    current_stanza_name = line.replace(" ", "_").lower()
+                else:
+                    current_stanza_data.append(line)
+
+        if current_stanza_name and current_stanza_data:
+            stanzas[current_stanza_name] = current_stanza_data  # Final stanza
+
+        return stanzas
+
+    def process_directory(self):
+        """
+        Processes all Waze CSV files in a directory.
+
+        - Iterates through all `.csv` files in the directory.
+        - Calls `process_waze_csv()` on each file.
+        - Saves structured JSON outputs in the configured `output_dir`.
+
+        :param input_dir: Directory containing Waze artificial CSV files.
+        """
+        input_dir = os.path.abspath(self.input_dir)
+        logging.info(f"Processing Waze CSV files in directory: {input_dir}")
+
+        if not os.path.isdir(input_dir):
+            logging.error(f"Invalid directory: {input_dir}")
+            return
+
+        file_count = 0
+        for file in os.listdir(input_dir):
+            file_path = os.path.join(input_dir, file)
+
+            if file.endswith(".csv") and os.path.isfile(file_path):
+                file_count += 1
+                logging.info(f"Processing Waze CSV: {file_path}")
+
+                # Update instance with new file path
+                self.input_file = file_path
+                self.process_waze_csv()
+
+        if file_count == 0:
+            logging.warning(f"No Waze CSV files found in {input_dir}")
+        else:
+            logging.info(f"Successfully processed {file_count} Waze CSV files.")
