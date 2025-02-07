@@ -1,14 +1,22 @@
-from bs4 import BeautifulSoup, NavigableString, Tag
-from datetime import datetime
+import sys
+import json
+import logging
 import html
-import re
+from bs4 import BeautifulSoup
 from xform.base_parser import BaseParser
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 
 class GvoiceParser(BaseParser):
     """
-    Parser for chat logs with the 'hChatLog hfeed' structure.
+    Parser for Google Voice chat logs with the 'hChatLog hfeed' structure.
     Extracts timestamps, authors (by phone number), and messages.
+    Reads from stdin and outputs structured JSON to stdout.
     """
 
     def _extract_records(self, html_content: str) -> list[dict]:
@@ -28,13 +36,16 @@ class GvoiceParser(BaseParser):
                 # Extract timestamp from <abbr class="dt" title="ISO8601 Timestamp">
                 timestamp_abbr = div.find("abbr", class_="dt")
                 if not timestamp_abbr or not timestamp_abbr.get("title"):
+                    logging.warning(
+                        "(GvoiceParser) Skipping message with missing timestamp."
+                    )
                     continue  # Skip if no timestamp is found
-
                 timestamp = timestamp_abbr["title"]  # ISO 8601 format
 
                 # Extract author phone number from <a class="tel" href="tel:+1234567890">
                 sender_cite = div.find("cite", class_="sender")
                 if not sender_cite:
+                    logging.warning("Skipping message with missing sender.")
                     continue
 
                 phone_tag = sender_cite.find("a", class_="tel")
@@ -43,15 +54,13 @@ class GvoiceParser(BaseParser):
                         "tel:+", ""
                     )  # Remove '+' prefix
                 else:
-                    phone_number = (
-                        "Unknown"  # Assign "Unknown" if phone number is missing
-                    )
+                    phone_number = "Unknown"
 
                 # Extract message from <q> (quoted text)
                 message_q = div.find("q")
                 if not message_q:
+                    logging.warning("Skipping message with missing content.")
                     continue
-
                 message = html.unescape(message_q.get_text(strip=True))
 
                 # Append extracted data to list
@@ -62,9 +71,22 @@ class GvoiceParser(BaseParser):
                         "timestamp": timestamp,
                     }
                 )
-
             except Exception as e:
-                # print(f"[DEBUG] Error processing message div: {e}")
+                logging.error(f"Error processing message div: {e}")
                 continue
 
         return messages
+
+
+def main():
+    """
+    Reads Google Voice chat logs in HTML from stdin and outputs structured JSON to stdout.
+    """
+    html_content = sys.stdin.read()
+    parser = GvoiceParser()
+    parsed_data = parser.parse(html_content)
+    print(json.dumps(parsed_data, indent=4))
+
+
+if __name__ == "__main__":
+    main()

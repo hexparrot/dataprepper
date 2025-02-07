@@ -1,12 +1,12 @@
 import json
 from abc import ABC, abstractmethod
+import sys
 
 
 class BaseRecord(ABC):
     """
     Abstract base class to represent a record that will be serialized to JSON.
-
-    Subclasses must implement the 'parse' method to populate _fields.
+    Supports both in-memory and stdin-based parsing.
     """
 
     # Default required fields that must be non-null/non-empty
@@ -39,39 +39,41 @@ class BaseRecord(ABC):
     def set_field(self, key, value):
         """
         Set a field in this record.
-        :param key: Name of the field (string).
-        :param value: Value of the field.
         """
         self._fields[key] = value
 
     def get_field(self, key, default=None):
         """
         Retrieve a field from this record.
-        :param key: Name of the field (string).
-        :param default: Returned if the field isn't found.
         """
         return self._fields.get(key, default)
 
     @property
     def is_valid(self):
         """
-        Checks whether this record meets the minimum validity requirements:
-        - All required fields are present.
-        - All required fields are non-null and non-empty (if they're strings).
+        Checks whether this record meets the minimum validity requirements.
         """
         for req_field in self.required_fields:
             val = self._fields.get(req_field, None)
-            if val is None:
-                return False
-            if isinstance(val, str) and not val.strip():
-                # if it's a string, it must not be empty
+            if val is None or (isinstance(val, str) and not val.strip()):
                 return False
         return True
 
-    def __str__(self):
+    def to_json(self):
         """
-        Returns a pretty-printed JSON string representing this record
-        (flat, single-level). Indentation ensures it's human-readable and
-        easily navigated by parsers (like ijson).
+        Returns the record as a JSON object.
         """
         return json.dumps(self._fields, indent=2)
+
+    @classmethod
+    def from_stdin(cls):
+        """
+        Parses a record from stdin input (for standardized processing).
+        """
+        raw_content = sys.stdin.read().strip()
+        instance = cls()
+        instance.parse(raw_content)
+        return instance
+
+    def __str__(self):
+        return self.to_json()
