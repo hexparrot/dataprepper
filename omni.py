@@ -1,73 +1,81 @@
+#!/usr/bin/env python3
+"""
+Omni-parser script.
+
+- Iterates over userdata/raw, looking for recognized directory names.
+- Uses the appropriate parser for each directory.
+- Writes structured JSON to userdata/transformed.
+- Logs iteration details to stderr.
+"""
+
 import os
+import sys
 import json
-import csv
 import logging
-from structs.base_record import BaseRecord
+from structs.chat_record import ChatRecord
 from structs.csv_record import CSVRecord, WazeCSVRecord
 
-# Configure logging format
+# Configure logging to stderr
 logging.basicConfig(
+    stream=sys.stderr,
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
-# Adjust these paths as needed
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # location of script
+# Adjust paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 USERDATA_DIR = os.path.join(BASE_DIR, "userdata")
 RAW_DIR = os.path.join(USERDATA_DIR, "raw")
 TRANSFORMED_DIR = os.path.join(USERDATA_DIR, "transformed")
 
 
+def parse_chat(raw_dir, transformed_dir):
+    """
+    Parses chat logs from raw_dir, processes with ChatRecord,
+    and writes structured JSON to transformed_dir.
+    """
+    logging.info(f"Processing chat logs in {raw_dir}...")
+    processed_files = set()
+    chat_records = ChatRecord.process_chat_directory(raw_dir, transformed_dir) or []
+
+    for record in chat_records:
+        file_name = record.get("file_name")
+        if file_name in processed_files:
+            continue  # Skip duplicate processing
+        processed_files.add(file_name)
+        logging.info(
+            f"Processed {file_name} using parser: {record.get('parser_name', 'Unknown')}"
+        )
+
+    logging.info(f"Chat processing complete. JSON files saved in {transformed_dir}")
+
+
 def parse_csv(raw_dir, transformed_dir):
     """
-    Processes CSV data stored in `raw_dir`.
-    - Traverses all subdirectories within `raw_dir`
-    - Converts each CSV file into JSON
-    - Saves the output in `transformed_dir`
+    Processes CSV data stored in `raw_dir` and converts it to JSON.
     """
-    if not os.path.exists(raw_dir):
-        logging.error(f"The directory {raw_dir} does not exist.")
-        return
-
     logging.info(f"Processing CSV data in {raw_dir}...")
-
-    # Invoke CSV processing with the transformed directory
     record_handler = CSVRecord(raw_dir, transformed_dir)
     record_handler.process_directory()
-
     logging.info(f"CSV processing complete. JSON files saved in {transformed_dir}")
 
 
 def parse_waze(raw_dir, transformed_dir):
     """
-    Processes Waze CSV data stored in `raw_dir`.
-    - Splits stanzas in Waze files
-    - Converts each stanza to JSON
-    - Saves the output in `transformed_dir`
+    Processes Waze CSV data, splitting stanzas and structuring JSON output.
     """
-    if not os.path.exists(raw_dir):
-        logging.error(f"The directory {raw_dir} does not exist.")
-        return
-
     logging.info(f"Processing Waze CSV data in {raw_dir}...")
-
-    # Invoke Waze CSV processing with stanza handling
     record_handler = WazeCSVRecord(raw_dir, transformed_dir)
     record_handler.process_waze_csv()
+    logging.info(f"Waze processing complete. JSON files saved in {transformed_dir}")
 
-    logging.info(f"Waze CSV processing complete. JSON files saved in {transformed_dir}")
 
-
-# PARSERS dictionary including CSV and Waze CSV processing
 PARSERS = {
+    "chat": parse_chat,
     "lyft": parse_csv,
     "niantic": parse_csv,
     "reddit": parse_csv,
     "waze": parse_waze,
-    # "chat": parse_chat,
-    # "images": parse_images,
-    # "myanimelist": parse_myanimelist,
-    # "youtube": parse_youtube,
 }
 
 
@@ -78,13 +86,11 @@ def ensure_output_dir_exists(directory):
 
 
 def main():
-    logging.info("Starting omni-parser skeleton.")
-
+    logging.info("Starting omni-parser.")
     ensure_output_dir_exists(TRANSFORMED_DIR)
 
-    # Loop through subdirectories of userdata/raw
     if not os.path.isdir(RAW_DIR):
-        logging.error(f"RAW_DIR does not exist or is not a directory: {RAW_DIR}")
+        logging.error(f"RAW_DIR does not exist: {RAW_DIR}")
         sys.exit(1)
 
     for entry in os.listdir(RAW_DIR):
@@ -93,18 +99,15 @@ def main():
             logging.info(f"Found directory: {entry}")
             parser_func = PARSERS.get(entry)
             if parser_func:
-                # Create corresponding output dir under transformed, if needed
                 transformed_subdir_path = os.path.join(TRANSFORMED_DIR, entry)
                 ensure_output_dir_exists(transformed_subdir_path)
-
-                # Call the relevant parser
                 parser_func(raw_subdir_path, transformed_subdir_path)
             else:
                 logging.warning(f"No parser found for directory: {entry}")
         else:
-            logging.warning(f"Found file (not a directory) in raw root: {entry}")
+            logging.warning(f"Skipping file in raw root: {entry}")
 
-    logging.info("Finished omni-parser skeleton.")
+    logging.info("Finished omni-parser.")
 
 
 if __name__ == "__main__":

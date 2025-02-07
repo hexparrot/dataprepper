@@ -1,14 +1,23 @@
+import sys
+import json
+import re
+import logging
 from bs4 import BeautifulSoup
 from datetime import datetime
-import re
 from dateutil import parser as date_parser
 from xform.base_parser import BaseParser
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 
 class AimLogs2Parser(BaseParser):
     """
-    Parser for chat logs with timestamps inside <span> tags.
-    Accepts a provided date (YYYY-MM-DD) since timestamps lack a date.
+    Parser for AIM chat logs with timestamps inside <span> tags.
+    Reads from stdin and outputs structured JSON to stdout.
     """
 
     def __init__(self, date_str: str):
@@ -16,12 +25,11 @@ class AimLogs2Parser(BaseParser):
         Initializes the parser with a provided date (YYYY-MM-DD).
         :param date_str: Date string in format YYYY-MM-DD to prepend to parsed timestamps.
         """
-        super().__init__()
         self.date_str = date_str
 
     def _extract_records(self, html_content: str) -> list[dict]:
         """
-        Extract chat messages from an HTML file where each message is stored in a <span> tag.
+        Extract chat messages from an HTML log where each message is stored in a <span> tag.
         Extracts author, timestamp, and message from correctly formatted spans.
         """
         soup = BeautifulSoup(html_content, "html.parser")
@@ -35,8 +43,6 @@ class AimLogs2Parser(BaseParser):
 
             if match:
                 author, raw_timestamp, message = match.groups()
-
-                # Normalize timestamp with provided date
                 timestamp = self._format_timestamp(raw_timestamp)
 
                 if timestamp and message.strip():
@@ -47,22 +53,38 @@ class AimLogs2Parser(BaseParser):
                             "message": message.strip(),
                         }
                     )
-
             else:
-                pass  # print(f"[DEBUG] Skipping unrecognized span: {text}")
+                logging.debug(f"Skipping unrecognized span: {text}")
 
         return raw_records
 
     def _format_timestamp(self, raw_timestamp: str) -> str:
         """
         Format the raw timestamp into ISO 8601 using the provided date.
-        :param raw_timestamp: Time string (e.g., "12:48:44 PM").
-        :return: Full ISO 8601 timestamp (YYYY-MM-DDTHH:MM:SS).
         """
         try:
             full_timestamp = f"{self.date_str} {raw_timestamp}"
             timestamp_obj = date_parser.parse(full_timestamp)
             return timestamp_obj.strftime("%Y-%m-%dT%H:%M:%S")
         except ValueError:
-            print(f"[DEBUG] Failed to parse timestamp: {raw_timestamp}")
+            logging.warning(f"Failed to parse timestamp: {raw_timestamp}")
             return None
+
+
+def main():
+    """
+    Reads AIM log HTML from stdin and outputs JSON to stdout.
+    """
+    if len(sys.argv) < 2:
+        print("Usage: python aimlogs2_parser.py <YYYY-MM-DD>", file=sys.stderr)
+        sys.exit(1)
+
+    date_str = sys.argv[1]
+    parser = AimLogs2Parser(date_str)
+    html_content = sys.stdin.read()
+    parsed_data = parser.parse(html_content)
+    print(json.dumps(parsed_data, indent=4))
+
+
+if __name__ == "__main__":
+    main()
