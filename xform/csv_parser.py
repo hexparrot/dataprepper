@@ -1,6 +1,11 @@
+#!/usr/bin/env python3
 import sys
+import os
 import csv
 import json
+
+# Ensure Python finds the project modules no matter where the script is run
+sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/.."))
 from xform.base_parser import BaseParser
 
 

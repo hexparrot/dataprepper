@@ -1,9 +1,14 @@
+#!/usr/bin/env python3
 import sys
+import os
 import json
 import re
 import logging
 from bs4 import BeautifulSoup
 from dateutil import parser as date_parser
+
+# Ensure Python finds the project modules no matter where the script is run
+sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/.."))
 from xform.base_parser import BaseParser
 
 # Configure logging

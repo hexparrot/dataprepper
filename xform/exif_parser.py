@@ -1,9 +1,14 @@
+#!/usr/bin/env python3
 import sys
 import json
 import exifread
 import logging
 import io
+import os
 from datetime import datetime
+
+# Ensure Python finds the project modules no matter where the script is run
+sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/.."))
 from xform.base_parser import BaseParser  # Inherit from BaseParser
 
 # Configure logging
