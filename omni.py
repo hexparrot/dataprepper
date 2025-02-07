@@ -6,6 +6,7 @@ from structs.chat_record import ChatRecord
 from structs.csv_record import CSVRecord, WazeCSVRecord
 from structs.myanimelist_record import MyAnimeListRecord
 from structs.youtube_record import YouTubeRecord
+from structs.image_record import ImageRecord
 
 # Configure logging to stderr
 logging.basicConfig(
@@ -89,8 +90,22 @@ def parse_youtube(raw_dir, transformed_dir):
             logging.info(f"Saved processed YouTube records to {output_file}")
 
 
+def parse_exif(raw_dir, transformed_dir):
+    """
+    Processes images in raw_dir, extracts EXIF data,
+    and writes structured JSON to transformed_dir using ImageRecord.
+    """
+    logging.info(f"Processing EXIF data in {raw_dir}...")
+
+    image_record = ImageRecord(raw_dir, transformed_dir)
+    image_record.process_directory()  # Process all images in directory
+
+    logging.info(f"EXIF processing complete. JSON files saved in {transformed_dir}")
+
+
 PARSERS = {
     "chat": parse_chat,
+    "images": parse_exif,
     "lyft": parse_csv,
     "netflix": parse_csv,
     "niantic": parse_csv,
