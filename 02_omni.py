@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import sys
 import json
@@ -114,6 +115,7 @@ def parse_exif(raw_dir, transformed_dir):
 PARSERS = {
     "chat": parse_chat,
     "images": parse_exif,
+    "apple": parse_csv,
     "lyft": parse_csv,
     "netflix": parse_csv,
     "niantic": parse_csv,
