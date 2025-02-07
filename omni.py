@@ -74,6 +74,7 @@ PARSERS = {
     "lyft": parse_csv,
     "niantic": parse_csv,
     "reddit": parse_csv,
+    "netflix": parse_csv,
     "waze": parse_waze,
     "myanimelist": parse_myanimelist,
 }
