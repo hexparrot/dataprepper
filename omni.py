@@ -1,19 +1,10 @@
-#!/usr/bin/env python3
-"""
-Omni-parser script.
-
-- Iterates over userdata/raw, looking for recognized directory names.
-- Uses the appropriate parser for each directory.
-- Writes structured JSON to userdata/transformed.
-- Logs iteration details to stderr.
-"""
-
 import os
 import sys
 import json
 import logging
 from structs.chat_record import ChatRecord
 from structs.csv_record import CSVRecord, WazeCSVRecord
+from structs.myanimelist_record import MyAnimeListRecord
 
 # Configure logging to stderr
 logging.basicConfig(
@@ -35,18 +26,7 @@ def parse_chat(raw_dir, transformed_dir):
     and writes structured JSON to transformed_dir.
     """
     logging.info(f"Processing chat logs in {raw_dir}...")
-    processed_files = set()
-    chat_records = ChatRecord.process_chat_directory(raw_dir, transformed_dir) or []
-
-    for record in chat_records:
-        file_name = record.get("file_name")
-        if file_name in processed_files:
-            continue  # Skip duplicate processing
-        processed_files.add(file_name)
-        logging.info(
-            f"Processed {file_name} using parser: {record.get('parser_name', 'Unknown')}"
-        )
-
+    ChatRecord.process_chat_directory(raw_dir, transformed_dir)
     logging.info(f"Chat processing complete. JSON files saved in {transformed_dir}")
 
 
@@ -70,12 +50,32 @@ def parse_waze(raw_dir, transformed_dir):
     logging.info(f"Waze processing complete. JSON files saved in {transformed_dir}")
 
 
+def parse_myanimelist(raw_dir, transformed_dir):
+    """
+    Processes MyAnimeList XML exports and converts them to JSON.
+    """
+    logging.info(f"Processing MyAnimeList XML in {raw_dir}...")
+    for file in os.listdir(raw_dir):
+        file_path = os.path.join(raw_dir, file)
+        if file.endswith(".xml"):
+            with open(file_path, "r", encoding="utf-8") as f:
+                xml_content = f.read()
+            records = MyAnimeListRecord.parse(xml_content)
+            output_file = os.path.join(
+                transformed_dir, f"{os.path.splitext(file)[0]}.json"
+            )
+            with open(output_file, "w", encoding="utf-8") as f:
+                json.dump(records, f, indent=4)
+            logging.info(f"Saved processed MyAnimeList records to {output_file}")
+
+
 PARSERS = {
     "chat": parse_chat,
     "lyft": parse_csv,
     "niantic": parse_csv,
     "reddit": parse_csv,
     "waze": parse_waze,
+    "myanimelist": parse_myanimelist,
 }
 
 
