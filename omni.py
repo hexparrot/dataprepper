@@ -57,17 +57,25 @@ def parse_myanimelist(raw_dir, transformed_dir):
     Processes MyAnimeList XML exports and converts them to JSON.
     """
     logging.info(f"Processing MyAnimeList XML in {raw_dir}...")
+
     for file in os.listdir(raw_dir):
         file_path = os.path.join(raw_dir, file)
         if file.endswith(".xml"):
             with open(file_path, "r", encoding="utf-8") as f:
-                xml_content = f.read()
-            records = MyAnimeListRecord.parse(xml_content)
+                xml_content = f.read().strip()  # Ensure proper XML formatting
+
+            if not xml_content:
+                logging.warning(f"Skipping empty XML file: {file_path}")
+                continue  # Skip empty files
+
+            records = MyAnimeListRecord.parse_from_xml(xml_content)
+
             output_file = os.path.join(
                 transformed_dir, f"{os.path.splitext(file)[0]}.json"
             )
             with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(records, f, indent=4)
+
             logging.info(f"Saved processed MyAnimeList records to {output_file}")
 
 
