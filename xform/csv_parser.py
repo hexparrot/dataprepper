@@ -18,9 +18,7 @@ class CSVParser(BaseParser):
         comma_count = sum(line.count(",") for line in sample_lines)
         tab_count = sum(line.count("\t") for line in sample_lines)
 
-        return (
-            "\t" if tab_count > comma_count else ","
-        )  # Assume tab if more tabs than commas
+        return "\t" if tab_count > comma_count else ","
 
     def _extract_records(self, csv_content: str) -> list[dict]:
         """
@@ -29,7 +27,7 @@ class CSVParser(BaseParser):
         """
         delimiter = self._detect_delimiter(csv_content)
         reader = csv.DictReader(csv_content.splitlines(), delimiter=delimiter)
-        return [row for row in reader]  # No extra processing, just direct conversion
+        return list(reader)
 
 
 def main():
