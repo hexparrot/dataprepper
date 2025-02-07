@@ -1,7 +1,14 @@
+import sys
 import json
-from datetime import datetime
-import dateutil.parser  # More flexible timestamp parsing
+import logging
+import dateutil.parser
 from xform.base_parser import BaseParser
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 
 class GchatParser(BaseParser):
@@ -18,10 +25,20 @@ class GchatParser(BaseParser):
         """
         messages = []
 
+        if not json_content or not json_content.strip():
+            logging.warning("Received empty or invalid input. Skipping parsing.")
+            return messages
+
         try:
+            # logging.info(f"Raw JSON input (first 100 chars): {json_content[:100]}")
             data = json.loads(json_content)
 
-            # Google exports typically store messages in a list inside a root object
+            if not isinstance(data, (dict, list)):
+                logging.error(
+                    "Parsed JSON is not a valid dictionary or list. Skipping."
+                )
+                return messages
+
             messages_list = (
                 data.get("messages", data) if isinstance(data, dict) else data
             )
@@ -32,8 +49,6 @@ class GchatParser(BaseParser):
                     creator = message.get("creator", {})
                     author_name = creator.get("name", "Unknown")
                     author_email = creator.get("email", "unknown@example.com")
-
-                    # Format author as "name <email>"
                     author = f"{author_name} <{author_email}>"
 
                     # Extract and format timestamp
@@ -43,21 +58,26 @@ class GchatParser(BaseParser):
                     # Extract message text
                     text = message.get("text", "").strip()
 
-                    # Append extracted message
-                    messages.append(
-                        {
-                            "author": author,
-                            "message": text,
-                            "timestamp": timestamp,
-                        }
-                    )
-
+                    if text:
+                        messages.append(
+                            {
+                                "author": author,
+                                "message": text,
+                                "timestamp": timestamp,
+                            }
+                        )
+                    else:
+                        logging.warning("Skipping empty message.")
                 except Exception as e:
-                    # print(f"[DEBUG] Error parsing message: {e}")
-                    continue  # Skip malformed messages
+                    logging.warning(f"Skipping malformed message: {e}")
+                    continue
 
-        except json.JSONDecodeError:
-            pass  # print("[ERROR] Failed to parse JSON input.")
+        except json.JSONDecodeError as e:
+            logging.warning(f"(GchatParser) Stdin not parsable as JSON.")
+            return messages
+
+        if not messages:
+            logging.warning("No valid messages found after parsing.")
 
         return messages
 
@@ -71,12 +91,27 @@ class GchatParser(BaseParser):
             if not raw_timestamp:
                 return "1970-01-01T00:00:00Z"
 
-            # Use dateutil.parser to handle various formats automatically
             dt_obj = dateutil.parser.parse(raw_timestamp)
-
-            # Convert to standard ISO 8601 format with UTC timezone
             return dt_obj.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         except (ValueError, TypeError) as e:
-            print(f"[DEBUG] Failed to parse timestamp: {raw_timestamp} -> {e}")
-            return "1970-01-01T00:00:00Z"  # Default for failed cases
+            logging.warning(f"Failed to parse timestamp: {raw_timestamp} -> {e}")
+            return "1970-01-01T00:00:00Z"
+
+
+def main():
+    """
+    Reads Google Chat JSON from stdin and outputs structured JSON to stdout.
+    """
+    json_content = sys.stdin.read().strip()
+    if not json_content:
+        logging.warning("No input provided. Exiting gracefully.")
+        sys.exit(0)
+
+    parser = GchatParser()
+    parsed_data = parser.parse(json_content)
+    print(json.dumps(parsed_data, indent=4))
+
+
+if __name__ == "__main__":
+    main()

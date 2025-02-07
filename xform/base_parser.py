@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import json
+import logging
 
 
 class BaseParser(ABC):
@@ -14,6 +15,10 @@ class BaseParser(ABC):
         :param raw_content: Raw data as a string.
         :return: List of dictionaries with cleaned and validated data.
         """
+        if not raw_content or not raw_content.strip():
+            logging.warning("Received empty or invalid input. Returning empty list.")
+            return []
+
         sanitized_content = self._sanitize_content(raw_content)
         raw_records = self._extract_records(sanitized_content)
         return [record for record in map(self._normalize_record, raw_records)]

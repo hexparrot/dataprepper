@@ -1,13 +1,23 @@
+import sys
+import json
+import logging
+import html
+import re
 from bs4 import BeautifulSoup, NavigableString, Tag
 from datetime import datetime
-import re
-import html
 from xform.base_parser import BaseParser
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 
 class MsnParser(BaseParser):
     """
-    Parser for chat logs in Format C.
+    Parser for MSN chat logs in HTML format.
+    Reads from stdin and outputs structured JSON to stdout.
     """
 
     def __init__(self, date_str=""):
@@ -19,8 +29,8 @@ class MsnParser(BaseParser):
 
     def _extract_records(self, html_content: str) -> list[dict]:
         """
-        Extract raw records from the HTML content for Format C.
-        :param html_content: Sanitized HTML content as a string.
+        Extract raw chat records from MSN chat logs.
+        :param html_content: Raw HTML content as a string.
         :return: List of dictionaries with 'author', 'message', and 'timestamp'.
         """
         soup = BeautifulSoup(html_content, "html.parser")
@@ -31,36 +41,27 @@ class MsnParser(BaseParser):
             self._extract_date_from_title(soup) if not self.date_str else self.date_str
         )
 
-        # Find all <font> tags with color attribute indicating message author
+        # Find all <font> tags with a color attribute (used to indicate message author)
         font_tags = soup.find_all("font", color=re.compile(r"^#"))
 
         for font in font_tags:
             try:
-                # Extract and format the timestamp
                 timestamp = self._extract_timestamp(font)
-                if not timestamp:
-                    continue
-
-                # Extract the author
                 author = self._extract_author(font)
-                if not author:
-                    continue
-
-                # Extract the message
                 message = self._extract_message(font)
-                if not message:
-                    continue
 
-                # Append the raw record
-                raw_records.append(
-                    {
-                        "author": author,
-                        "message": message,
-                        "timestamp": timestamp,
-                    }
-                )
-            except Exception:
-                # Skip any records that fail extraction
+                if timestamp and author and message:
+                    raw_records.append(
+                        {
+                            "author": author,
+                            "message": message,
+                            "timestamp": timestamp,
+                        }
+                    )
+                else:
+                    logging.warning("Skipping incomplete chat entry.")
+            except Exception as e:
+                logging.error(f"Error processing message: {e}")
                 continue
 
         return raw_records
@@ -77,7 +78,6 @@ class MsnParser(BaseParser):
 
         title_text = title_tag.get_text(strip=True)
         try:
-            # Extract the date portion from the title
             date_part = title_text.split(" at ")[1].split(" ")[0]
             date_obj = datetime.strptime(date_part, "%m/%d/%Y")
             return date_obj.strftime("%Y-%m-%d")
@@ -87,7 +87,7 @@ class MsnParser(BaseParser):
     def _extract_timestamp(self, font):
         """
         Extract and format the timestamp from the nested <font> tag.
-        :param font: The parent <font> tag containing the nested timestamp tag.
+        :param font: The parent <font> tag containing the nested timestamp.
         :return: ISO 8601 formatted timestamp or None if invalid.
         """
         nested_font = font.find("font", size="2")
@@ -100,6 +100,7 @@ class MsnParser(BaseParser):
             date_part = self.date_str if self.date_str else "1970-01-01"
             return f"{date_part}T{time_obj.strftime('%H:%M:%S')}"
         except ValueError:
+            logging.warning(f"Invalid timestamp format: {timestamp_text}")
             return None
 
     def _extract_author(self, font):
@@ -125,7 +126,6 @@ class MsnParser(BaseParser):
         if not message_element:
             return None
 
-        # Handle cases with multiple siblings due to whitespace or newlines
         while (
             isinstance(message_element, NavigableString) and not message_element.strip()
         ):
@@ -136,3 +136,17 @@ class MsnParser(BaseParser):
         elif isinstance(message_element, Tag):
             return message_element.get_text(strip=True)
         return None
+
+
+def main():
+    """
+    Reads MSN chat logs in HTML from stdin and outputs JSON to stdout.
+    """
+    html_content = sys.stdin.read()
+    parser = MsnParser()
+    parsed_data = parser.parse(html_content)
+    print(json.dumps(parsed_data, indent=4))
+
+
+if __name__ == "__main__":
+    main()
