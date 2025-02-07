@@ -1,13 +1,20 @@
-import os
-import logging
+import sys
 import json
+import logging
 from bs4 import BeautifulSoup
 from structs.base_record import BaseRecord
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 
 class YouTubeRecord(BaseRecord):
     """
     Represents an entry from a YouTube watch history.
+    Reads from stdin and outputs structured JSON to stdout.
     """
 
     def __init__(self):
@@ -17,24 +24,22 @@ class YouTubeRecord(BaseRecord):
         super().__init__()
 
     @classmethod
-    def parse_file(cls, file_path):
+    def parse(cls, html_content: str):
         """
-        Parses a YouTube watch history HTML file and returns structured records.
-        :param file_path: Path to the HTML file.
+        Parses a YouTube watch history HTML string and returns structured records.
+        :param html_content: Raw HTML as a string.
         :return: List of structured YouTube watch records.
         """
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                soup = BeautifulSoup(f, "html.parser")
-
-            youtube_records = []
-            for entry in cls._extract_entries(soup):
-                youtube_records.append(entry)
-
-            return youtube_records
+            soup = BeautifulSoup(html_content, "html.parser")
         except Exception as e:
-            logging.error(f"Error parsing YouTube watch history HTML {file_path}: {e}")
+            logging.error(f"Failed to parse HTML content: {e}")
             return []
+
+        youtube_records = cls._extract_entries(soup)
+        if not youtube_records:
+            logging.warning("No valid YouTube watch records found.")
+        return youtube_records
 
     @staticmethod
     def _extract_entries(soup):
@@ -51,11 +56,11 @@ class YouTubeRecord(BaseRecord):
         ):
             try:
                 title_tag = entry.find("a")
-                title = title_tag.text.strip() if title_tag else "unknown"
+                title = title_tag.text.strip() if title_tag else "Unknown Title"
                 url = (
                     title_tag["href"]
                     if title_tag and "href" in title_tag.attrs
-                    else "unknown"
+                    else "Unknown"
                 )
 
                 timestamp_tag = entry.find("div", class_="metadata-cell")
@@ -66,7 +71,7 @@ class YouTubeRecord(BaseRecord):
                 )
 
                 channel_tag = entry.find("a", class_="yt-simple-endpoint")
-                channel = channel_tag.text.strip() if channel_tag else "unknown"
+                channel = channel_tag.text.strip() if channel_tag else "Unknown Channel"
 
                 record = {
                     "title": title,
@@ -82,3 +87,20 @@ class YouTubeRecord(BaseRecord):
                 logging.warning(f"Skipping malformed entry: {e}")
 
         return records
+
+
+def main():
+    """
+    Reads YouTube Watch History HTML from stdin and outputs structured JSON to stdout.
+    """
+    html_content = sys.stdin.read().strip()
+    if not html_content:
+        logging.warning("No input provided. Exiting gracefully.")
+        sys.exit(0)
+
+    records = YouTubeRecord.parse(html_content)
+    print(json.dumps(records, indent=4))
+
+
+if __name__ == "__main__":
+    main()

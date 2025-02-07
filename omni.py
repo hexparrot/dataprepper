@@ -5,6 +5,7 @@ import logging
 from structs.chat_record import ChatRecord
 from structs.csv_record import CSVRecord, WazeCSVRecord
 from structs.myanimelist_record import MyAnimeListRecord
+from structs.youtube_record import YouTubeRecord
 
 # Configure logging to stderr
 logging.basicConfig(
@@ -69,14 +70,34 @@ def parse_myanimelist(raw_dir, transformed_dir):
             logging.info(f"Saved processed MyAnimeList records to {output_file}")
 
 
+def parse_youtube(raw_dir, transformed_dir):
+    """
+    Processes YouTube Watch History HTML files and converts them to JSON.
+    """
+    logging.info(f"Processing YouTube Watch History in {raw_dir}...")
+    for file in os.listdir(raw_dir):
+        file_path = os.path.join(raw_dir, file)
+        if file.endswith(".html"):
+            with open(file_path, "r", encoding="utf-8") as f:
+                html_content = f.read()
+            records = YouTubeRecord.parse(html_content)
+            output_file = os.path.join(
+                transformed_dir, f"{os.path.splitext(file)[0]}.json"
+            )
+            with open(output_file, "w", encoding="utf-8") as f:
+                json.dump(records, f, indent=4)
+            logging.info(f"Saved processed YouTube records to {output_file}")
+
+
 PARSERS = {
     "chat": parse_chat,
     "lyft": parse_csv,
+    "netflix": parse_csv,
     "niantic": parse_csv,
     "reddit": parse_csv,
-    "netflix": parse_csv,
     "waze": parse_waze,
     "myanimelist": parse_myanimelist,
+    "youtube": parse_youtube,
 }
 
 
