@@ -43,6 +43,27 @@ def parse_csv(raw_dir, transformed_dir):
     logging.info(f"CSV processing complete. JSON files saved in {transformed_dir}")
 
 
+def parse_json(raw_dir, transformed_dir):
+    """Recursively finds and copies JSON files from raw_dir to transformed_dir."""
+    import shutil
+
+    logging.info(f"Scanning for JSON files in {raw_dir}...")
+
+    for root, _, files in os.walk(raw_dir):
+        for file in files:
+            if file.endswith(".json"):
+                raw_file_path = os.path.join(root, file)
+                relative_path = os.path.relpath(raw_file_path, raw_dir)
+                transformed_file_path = os.path.join(transformed_dir, relative_path)
+
+                # Ensure the subdirectory structure exists in transformed_dir
+                os.makedirs(os.path.dirname(transformed_file_path), exist_ok=True)
+
+                # Copy the file
+                shutil.copy2(raw_file_path, transformed_file_path)
+                logging.info(f"Copied: {raw_file_path} -> {transformed_file_path}")
+
+
 def parse_waze(raw_dir, transformed_dir):
     """
     Processes Waze CSV data, splitting stanzas and structuring JSON output.
@@ -120,6 +141,7 @@ PARSERS = {
     "netflix": parse_csv,
     "niantic": parse_csv,
     "reddit": parse_csv,
+    "spotify": parse_json,
     "waze": parse_waze,
     "myanimelist": parse_myanimelist,
     "youtube": parse_youtube,
