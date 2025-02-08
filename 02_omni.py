@@ -161,11 +161,15 @@ def parse_exif(raw_dir, transformed_dir):
     and writes structured JSON to transformed_dir using ImageRecord.
     """
     logging.info(f"Processing EXIF data in {raw_dir}...")
-
     image_record = ImageRecord(raw_dir, transformed_dir)
-    image_record.process_directory()  # Process all images in directory
+    records = ImageRecord.process_directory(
+        raw_dir, transformed_dir
+    )  # Returns list of processed images
 
-    logging.info(f"EXIF processing complete. JSON files saved in {transformed_dir}")
+    output_file = os.path.join(transformed_dir, "exif_data.json")
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(records, f, indent=4)
+    logging.info(f"Saved EXIF data to {output_file}")
 
 
 PARSERS = {

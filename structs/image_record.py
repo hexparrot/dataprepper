@@ -66,27 +66,32 @@ class ImageRecord(BaseRecord):
         except Exception as e:
             logging.error(f"Failed to process {file_path}: {e}")
 
-    def process_directory(self):
-        """
-        Traverses directory and converts all image files to structured JSON.
-        """
-        logging.info(f"Processing image files in directory: {self.input_dir}")
+    def process_directory(input_dir, output_dir=None):
+        """Processes all image files in a directory and returns a JSON list of structured records."""
+        logging.info(f"Processing image files in directory: {input_dir}")
+        records = []
 
-        file_count = 0
-        for root, _, files in os.walk(self.input_dir):
+        if not os.path.isdir(input_dir):
+            logging.error(f"Invalid directory: {input_dir}")
+            return []
+
+        for root, _, files in os.walk(input_dir):
             for file in files:
                 if file.lower().endswith((".jpg", ".jpeg", ".png", ".tiff")):
-                    file_count += 1
                     image_path = os.path.join(root, file)
-                    json_path = os.path.join(
-                        self.output_root, os.path.splitext(file)[0] + ".json"
+                    image_record = (
+                        ImageRecord(input_dir, output_dir)
+                        if output_dir
+                        else ImageRecord(input_dir, "")
                     )
-                    self.process_image(image_path, json_path)
+                    image_record.parse(image_path)
 
-        if file_count == 0:
-            logging.warning(f"No image files found in {self.input_dir}")
-        else:
-            logging.info(f"Successfully processed {file_count} image files.")
+                    if image_record.is_valid:
+                        records.append(image_record._fields)
+                    else:
+                        logging.warning(f"Skipping invalid record for {image_path}")
+
+        return records
 
     def process_image(self, image_path, json_path):
         """
