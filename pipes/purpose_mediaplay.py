@@ -53,6 +53,13 @@ class MediaHistoryPipe(BaseJSONPipe):
             return None
 
     def convert_to_human_readable_time(self, timestamp_iso):
+        """Converts ISO 8601 timestamp to human-readable format, ensuring compatibility with different timestamp variations."""
+        try:
+            dt = datetime.fromisoformat(timestamp_iso.replace("Z", ""))
+            return dt.strftime("%B %d, %Y at %-I:%M %p UTC")
+        except ValueError:
+            self.log(f"Invalid ISO timestamp format: {timestamp_iso}")
+            return timestamp_iso
         """Converts ISO 8601 timestamp to human-readable format."""
         try:
             dt = datetime.strptime(timestamp_iso, "%Y-%m-%dT%H:%M:%SZ")
@@ -201,10 +208,62 @@ class SpotifyListeningHistoryPipe(MediaHistoryPipe):
             return None
 
 
+class AppleMusicHistoryPipe(MediaHistoryPipe):
+    """Processes Apple Music listening history JSON data."""
+
+    def process_entry(self, entry):
+        try:
+            track_name = entry.get("Track Name")
+            if not track_name:
+                return None
+
+            timestamp_ms = entry.get("Last Played Date")
+            timestamp_iso = (
+                datetime.fromtimestamp(
+                    int(timestamp_ms) / 1000, timezone.utc
+                ).isoformat()
+                + "Z"
+                if timestamp_ms
+                else None
+            )
+            timestamp_human = self.convert_to_human_readable_time(timestamp_iso)
+
+            is_user_initiated = (
+                entry.get("Is User Initiated", "false").lower() == "true"
+            )
+            author = "User"
+            detail = (
+                f"I listened to '{track_name}' on Apple Music on {timestamp_human}."
+                if timestamp_human
+                else None
+            )
+
+            return {
+                k: v
+                for k, v in {
+                    "timestamp": timestamp_iso
+                    or datetime.now(timezone.utc).isoformat(),
+                    "trackName": track_name,
+                    "isUserInitiated": is_user_initiated,
+                    "author": author,
+                    "detail": detail,
+                    "metadata": {
+                        "processedBy": "AppleMusicHistoryPipe_v1",
+                        "processingTimestamp": datetime.now(timezone.utc).isoformat(),
+                    },
+                }.items()
+                if v is not None
+            }
+        except Exception as e:
+            self.log(f"Error processing entry: {e}")
+            return None
+
+
 PARSERS = {
     "netflix": NetflixWatchHistoryPipe,
     "youtube": YouTubeWatchHistoryPipe,
     "spotify": SpotifyListeningHistoryPipe,
+    "apple": AppleMusicHistoryPipe,
 }
 
 if __name__ == "__main__":
