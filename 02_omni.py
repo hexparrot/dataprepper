@@ -64,6 +64,41 @@ def parse_json(raw_dir, transformed_dir):
                 logging.info(f"Copied: {raw_file_path} -> {transformed_file_path}")
 
 
+def parse_csv_json(raw_dir, transformed_dir):
+    """
+    Processes directories containing both CSV and JSON files.
+    - CSV files are processed using CSVRecord.
+    - JSON files are copied as-is to transformed_dir.
+    """
+    import shutil
+
+    logging.info(f"Processing CSV and JSON files in {raw_dir}...")
+
+    # Process CSV files
+    record_handler = CSVRecord(raw_dir, transformed_dir)
+    record_handler.process_directory()
+    logging.info(f"CSV processing complete. JSON files saved in {transformed_dir}")
+
+    # Process JSON files
+    for root, _, files in os.walk(raw_dir):
+        for file in files:
+            if file.endswith(".json"):
+                raw_file_path = os.path.join(root, file)
+                relative_path = os.path.relpath(raw_file_path, raw_dir)
+                transformed_file_path = os.path.join(transformed_dir, relative_path)
+
+                # Ensure the subdirectory structure exists in transformed_dir
+                os.makedirs(os.path.dirname(transformed_file_path), exist_ok=True)
+
+                # Copy the file
+                shutil.copy2(raw_file_path, transformed_file_path)
+                logging.info(
+                    f"Copied JSON file: {raw_file_path} -> {transformed_file_path}"
+                )
+
+    logging.info(f"CSV and JSON processing complete. Files saved in {transformed_dir}")
+
+
 def parse_waze(raw_dir, transformed_dir):
     """
     Processes Waze CSV data, splitting stanzas and structuring JSON output.
@@ -136,7 +171,8 @@ def parse_exif(raw_dir, transformed_dir):
 PARSERS = {
     "chat": parse_chat,
     "images": parse_exif,
-    "apple": parse_csv,
+    "apple": parse_csv_json,
+    "fitbit": parse_csv_json,
     "lyft": parse_csv,
     "netflix": parse_csv,
     "niantic": parse_csv,
