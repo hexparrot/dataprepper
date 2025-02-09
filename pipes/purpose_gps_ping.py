@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
+import logging
 import json
 import sys
 from datetime import datetime, timezone
 from basepipe import BaseJSONPipe
+from rewrite_flatten_waze_gps import (
+    WazeGPSPipe,
+)  # Import existing Waze processing class
 
 
 class LocationPingPipe(BaseJSONPipe):
@@ -42,6 +46,42 @@ class LocationPingPipe(BaseJSONPipe):
 
     def process_entry(self, entry):
         raise NotImplementedError("Subclasses must implement process_entry.")
+
+
+class PokemonGoLocationPingPipe(LocationPingPipe):
+    """Processes Pokémon GO Pokéstop spin location data."""
+
+    def process_entry(self, entry):
+        try:
+            timestamp_str = entry.get("Timestamp")
+            timestamp_iso = (
+                self.convert_to_iso8601(timestamp_str) if timestamp_str else None
+            )
+            timestamp_human = self.convert_to_human_readable_time(timestamp_iso)
+
+            latitude = float(entry.get("Player_Latitude", 0))
+            longitude = float(entry.get("Player_Longitude", 0))
+
+            if latitude == 0 and longitude == 0:
+                self.log("Skipping record with invalid location (0,0)")
+                return None
+
+            detail = f"Pokemon GO interaction at ({latitude}, {longitude}) on {timestamp_human}."
+
+            return {
+                "timestamp": timestamp_iso,
+                "latitude": latitude,
+                "longitude": longitude,
+                "author": "User",
+                "detail": detail,
+                "metadata": {
+                    "processedBy": "PokemonGoLocationPingPipe_v1",
+                    "processingTimestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            }
+        except Exception as e:
+            self.log(f"Error processing entry: {e}")
+            return None
 
 
 class ExifLocationPingPipe(LocationPingPipe):
@@ -98,42 +138,6 @@ class ExifLocationPingPipe(LocationPingPipe):
                 "detail": detail,
                 "metadata": {
                     "processedBy": "ExifLocationPingPipe_v1",
-                    "processingTimestamp": datetime.now(timezone.utc).isoformat(),
-                },
-            }
-        except Exception as e:
-            self.log(f"Error processing entry: {e}")
-            return None
-
-
-class PokemonGoLocationPingPipe(LocationPingPipe):
-    """Processes Pokémon GO Pokéstop spin location data."""
-
-    def process_entry(self, entry):
-        try:
-            timestamp_str = entry.get("Timestamp")
-            timestamp_iso = (
-                self.convert_to_iso8601(timestamp_str) if timestamp_str else None
-            )
-            timestamp_human = self.convert_to_human_readable_time(timestamp_iso)
-
-            latitude = float(entry.get("Player_Latitude", 0))
-            longitude = float(entry.get("Player_Longitude", 0))
-
-            if latitude == 0 and longitude == 0:
-                self.log("Skipping record with invalid location (0,0)")
-                return None
-
-            detail = f"Pokemon GO interaction at ({latitude}, {longitude}) on {timestamp_human}."
-
-            return {
-                "timestamp": timestamp_iso,
-                "latitude": latitude,
-                "longitude": longitude,
-                "author": "User",
-                "detail": detail,
-                "metadata": {
-                    "processedBy": "PokemonGoLocationPingPipe_v1",
                     "processingTimestamp": datetime.now(timezone.utc).isoformat(),
                 },
             }
@@ -227,11 +231,12 @@ PARSERS = {
     "exif": ExifLocationPingPipe,
     "pogo": PokemonGoLocationPingPipe,
     "lyft": LyftGPSPingPipe,
+    "waze": WazeGPSPipe,
 }
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        sys.stderr.write("Usage: purpose_gps_ping.py <exif|pogo>\n")
+        sys.stderr.write("Usage: purpose_gps_ping.py <exif|pogo|lyft|waze>\n")
         sys.exit(1)
 
     parser_type = sys.argv[1].lower()

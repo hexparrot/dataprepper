@@ -67,7 +67,7 @@ class WazeGPSPipe(BaseJSONPipe):
 
                 transformed_records.append(
                     {
-                        "author": "unspecified",
+                        "author": "User",
                         "detail": f"GPS ping via Waze for trip on {trip_date}",
                         "timestamp": iso_timestamp,
                         "latitude": lat,
