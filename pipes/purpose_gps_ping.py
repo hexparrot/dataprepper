@@ -142,9 +142,91 @@ class PokemonGoLocationPingPipe(LocationPingPipe):
             return None
 
 
+class LyftGPSPingPipe(BaseJSONPipe):
+    """Processes Lyft ride records into three separate GPS events."""
+
+    def convert_timestamp(self, ts):
+        """Converts a timestamp string to ISO 8601 format."""
+        return (
+            datetime.strptime(ts.replace(" UTC", ""), "%Y-%m-%d %H:%M:%S").isoformat()
+            if ts
+            else None
+        )
+
+    def convert_to_human_readable_time(self, timestamp_iso):
+        """Converts ISO 8601 timestamp to human-readable format."""
+        if not timestamp_iso:
+            return "Unknown Time"
+        try:
+            dt = datetime.fromisoformat(timestamp_iso.replace("Z", ""))
+            return dt.strftime("%B %d, %Y at %-I:%M %p UTC")
+        except ValueError:
+            self.log(f"Invalid ISO timestamp format: {timestamp_iso}")
+            return "Unknown Time"
+
+    def extract_city_state(self, address):
+        """Attempts to extract the city and state or city and country from an address."""
+        if not address:
+            return "Unknown Location"
+        parts = address.split(", ")
+        if len(parts) >= 2:
+            return ", ".join(
+                parts[-2:]
+            )  # Get last two parts (e.g., City, State or City, Country)
+        return address  # Fallback to full address if parsing fails
+
+    def process_entry(self, entry):
+        """Processes a single Lyft ride record into structured GPS events."""
+        events = []
+
+        # Create event for ride request
+        if entry.get("requested_timestamp"):
+            timestamp_iso = self.convert_timestamp(entry["requested_timestamp"])
+            events.append(
+                {
+                    "timestamp": timestamp_iso,
+                    "latitude": entry["requested_lat"],
+                    "longitude": entry["requested_lng"],
+                    "detail": f"Rideshare interaction on {self.convert_to_human_readable_time(timestamp_iso)}",
+                    "author": "User",
+                }
+            )
+
+        # Create event for pickup
+        if entry.get("pickup_timestamp"):
+            timestamp_iso = self.convert_timestamp(entry["pickup_timestamp"])
+            location = self.extract_city_state(entry.get("pickup_address"))
+            events.append(
+                {
+                    "timestamp": timestamp_iso,
+                    "latitude": entry["pickup_lat"],
+                    "longitude": entry["pickup_lng"],
+                    "detail": f"Rideshare interaction on {self.convert_to_human_readable_time(timestamp_iso)} in {location}",
+                    "author": "User",
+                }
+            )
+
+        # Create event for dropoff
+        if entry.get("dropoff_timestamp"):
+            timestamp_iso = self.convert_timestamp(entry["dropoff_timestamp"])
+            location = self.extract_city_state(entry.get("destination_address"))
+            events.append(
+                {
+                    "timestamp": timestamp_iso,
+                    "latitude": entry["dropoff_lat"],
+                    "longitude": entry["dropoff_lng"],
+                    "detail": f"Rideshare interaction on {self.convert_to_human_readable_time(timestamp_iso)} in {location}",
+                    "author": "User",
+                }
+            )
+
+        return events
+
+
 PARSERS = {
     "exif": ExifLocationPingPipe,
     "pogo": PokemonGoLocationPingPipe,
+    "lyft": LyftGPSPingPipe,
 }
 
 if __name__ == "__main__":
