@@ -74,6 +74,7 @@ class PokemonGoLocationPingPipe(LocationPingPipe):
                 "longitude": longitude,
                 "author": "User",
                 "detail": detail,
+                "product": "Pokemon GO",
                 "metadata": {
                     "processedBy": "PokemonGoLocationPingPipe_v1",
                     "processingTimestamp": datetime.now(timezone.utc).isoformat(),
@@ -136,6 +137,7 @@ class ExifLocationPingPipe(LocationPingPipe):
                 "longitude": longitude,
                 "author": "User",
                 "detail": detail,
+                "product": "CameraGPS",
                 "metadata": {
                     "processedBy": "ExifLocationPingPipe_v1",
                     "processingTimestamp": datetime.now(timezone.utc).isoformat(),
@@ -193,6 +195,11 @@ class LyftGPSPingPipe(BaseJSONPipe):
                     "longitude": entry["requested_lng"],
                     "detail": f"Rideshare interaction on {self.convert_to_human_readable_time(timestamp_iso)}",
                     "author": "User",
+                    "product": "Lyft",
+                    "metadata": {
+                        "processedBy": "LyftGPSPingPipe_v1",
+                        "processingTimestamp": datetime.now(timezone.utc).isoformat(),
+                    },
                 }
             )
 
@@ -207,6 +214,11 @@ class LyftGPSPingPipe(BaseJSONPipe):
                     "longitude": entry["pickup_lng"],
                     "detail": f"Rideshare interaction on {self.convert_to_human_readable_time(timestamp_iso)} in {location}",
                     "author": "User",
+                    "product": "Lyft",
+                    "metadata": {
+                        "processedBy": "LyftGPSPingPipe_v1",
+                        "processingTimestamp": datetime.now(timezone.utc).isoformat(),
+                    },
                 }
             )
 
@@ -221,6 +233,11 @@ class LyftGPSPingPipe(BaseJSONPipe):
                     "longitude": entry["dropoff_lng"],
                     "detail": f"Rideshare interaction on {self.convert_to_human_readable_time(timestamp_iso)} in {location}",
                     "author": "User",
+                    "product": "Lyft",
+                    "metadata": {
+                        "processedBy": "LyftGPSPingPipe_v1",
+                        "processingTimestamp": datetime.now(timezone.utc).isoformat(),
+                    },
                 }
             )
 

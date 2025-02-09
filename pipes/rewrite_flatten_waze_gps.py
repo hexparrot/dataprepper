@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from basepipe import BaseJSONPipe
 
 # Configure logging
@@ -73,6 +73,12 @@ class WazeGPSPipe(BaseJSONPipe):
                         "latitude": lat,
                         "longitude": lon,
                         "product": "Waze",
+                        "metadata": {
+                            "processedBy": "LyftGPSPingPipe_v1",
+                            "processingTimestamp": datetime.now(
+                                timezone.utc
+                            ).isoformat(),
+                        },
                     }
                 )
 
