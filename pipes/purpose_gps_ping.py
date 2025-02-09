@@ -124,9 +124,7 @@ class PokemonGoLocationPingPipe(LocationPingPipe):
                 self.log("Skipping record with invalid location (0,0)")
                 return None
 
-            detail = (
-                f"I spun a Pokestop at ({latitude}, {longitude}) on {timestamp_human}."
-            )
+            detail = f"Pokemon GO interaction at ({latitude}, {longitude}) on {timestamp_human}."
 
             return {
                 "timestamp": timestamp_iso,
