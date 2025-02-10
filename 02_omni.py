@@ -44,7 +44,7 @@ def parse_csv(raw_dir, transformed_dir):
 
 
 def parse_json(raw_dir, transformed_dir):
-    """Recursively finds and copies JSON files from raw_dir to transformed_dir."""
+    """Recursively finds, validates, and copies JSON files from raw_dir to transformed_dir."""
     import shutil
 
     logging.info(f"Scanning for JSON files in {raw_dir}...")
@@ -56,12 +56,19 @@ def parse_json(raw_dir, transformed_dir):
                 relative_path = os.path.relpath(raw_file_path, raw_dir)
                 transformed_file_path = os.path.join(transformed_dir, relative_path)
 
-                # Ensure the subdirectory structure exists in transformed_dir
-                os.makedirs(os.path.dirname(transformed_file_path), exist_ok=True)
+                try:
+                    # Open and validate JSON
+                    with open(raw_file_path, "r", encoding="utf-8") as f:
+                        json.load(f)
 
-                # Copy the file
-                shutil.copy2(raw_file_path, transformed_file_path)
-                logging.info(f"Copied: {raw_file_path} -> {transformed_file_path}")
+                    # Ensure the subdirectory structure exists in transformed_dir
+                    os.makedirs(os.path.dirname(transformed_file_path), exist_ok=True)
+                    shutil.copy2(raw_file_path, transformed_file_path)
+                    logging.info(
+                        f"Validated & Copied: {raw_file_path} -> {transformed_file_path}"
+                    )
+                except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                    logging.warning(f"Invalid JSON skipped: {raw_file_path} ({e})")
 
 
 def parse_csv_json(raw_dir, transformed_dir):
