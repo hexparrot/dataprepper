@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+import sys
+import json
+import argparse
+from pymongo import MongoClient, errors
+
+# Parse command-line arguments
+parser = argparse.ArgumentParser(
+    description="Insert JSON data into MongoDB from stdin."
+)
+parser.add_argument(
+    "--db",
+    type=str,
+    default="geo_events_db",
+    help="MongoDB database name (default: geo_events_db)",
+)
+parser.add_argument(
+    "--collection",
+    type=str,
+    default="pings",
+    help="MongoDB collection name (default: pings)",
+)
+args = parser.parse_args()
+
+# MongoDB connection settings
+MONGO_URI = "mongodb://admin:password@localhost:27017/admin"
+DB_NAME = args.db
+COLLECTION_NAME = args.collection
+
+try:
+    # Connect to MongoDB
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)  # 5s timeout
+    db = client[DB_NAME]
+    collection = db[COLLECTION_NAME]
+
+    # Read JSON from stdin
+    data = json.load(sys.stdin)
+
+    # Insert into MongoDB
+    if isinstance(data, list):
+        result = collection.insert_many(data, ordered=False)  # Ignore duplicate errors
+        print(
+            f"✅ Inserted {len(result.inserted_ids)} records into {DB_NAME}.{COLLECTION_NAME}"
+        )
+    else:
+        result = collection.insert_one(data)
+        print(f"✅ Inserted 1 record into {DB_NAME}.{COLLECTION_NAME}")
+
+except json.JSONDecodeError:
+    print("❌ Invalid JSON input", file=sys.stderr)
+    sys.exit(1)
+except errors.ServerSelectionTimeoutError:
+    print(
+        "❌ Unable to connect to MongoDB. Check your connection settings.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+except errors.BulkWriteError as e:
+    print(f"⚠️ Some records may already exist: {e.details}", file=sys.stderr)
+except Exception as e:
+    print(f"❌ Unexpected error: {e}", file=sys.stderr)
+    sys.exit(1)
