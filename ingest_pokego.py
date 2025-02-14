@@ -1,3 +1,4 @@
+import re
 import os
 import json
 import pymongo
@@ -10,7 +11,11 @@ logging.basicConfig(
 )
 
 # MongoDB Connection
-MONGO_URI = "mongodb://admin:uberleet@localhost:27017/admin"
+MONGO_USER = os.getenv("MONGO_USER", "admin")
+MONGO_PASSWORD = os.getenv("MONGO_PASSWORD", "password")
+MONGO_HOST = "localhost"
+MONGO_PORT = "27017"
+MONGO_URI = f"mongodb://{MONGO_USER}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/admin"
 DB_NAME = "pokemongo"
 DATA_DIR = "userdata/purposed/niantic"
 
@@ -18,6 +23,11 @@ DATA_DIR = "userdata/purposed/niantic"
 def get_mongo_client():
     """Establishes and returns a MongoDB client."""
     return pymongo.MongoClient(MONGO_URI)
+
+
+def sanitize_field_name(field_name):
+    """Sanitizes field names by replacing spaces and special characters with underscores."""
+    return re.sub(r"[^a-zA-Z0-9_]", "_", field_name)
 
 
 def convert_timestamp(doc):
@@ -60,9 +70,19 @@ def ingest_json_files():
                         continue
 
                     data = (
-                        [convert_timestamp(doc) for doc in data]
+                        [
+                            convert_timestamp(
+                                {sanitize_field_name(k): v for k, v in doc.items()}
+                            )
+                            for doc in data
+                        ]
                         if isinstance(data, list)
-                        else [convert_timestamp(data)]
+                        else [
+                            {
+                                sanitize_field_name(k): v
+                                for k, v in convert_timestamp(data).items()
+                            }
+                        ]
                     )
 
                     if collection.estimated_document_count() == 0:
