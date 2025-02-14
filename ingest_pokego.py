@@ -1,11 +1,16 @@
-#!/usr/bin/env python3
 import os
 import json
 import pymongo
+import logging
 from datetime import datetime
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 # MongoDB Connection
-MONGO_URI = "mongodb://admin:password@localhost:27017/admin"
+MONGO_URI = "mongodb://admin:uberleet@localhost:27017/admin"
 DB_NAME = "pokemongo"
 DATA_DIR = "userdata/purposed/niantic"
 
@@ -27,13 +32,18 @@ def convert_timestamp(doc):
     return doc
 
 
+def document_exists(collection, doc):
+    """Checks if a document already exists in the collection."""
+    return collection.count_documents(doc, limit=1) > 0
+
+
 def ingest_json_files():
     """Iterates through JSON files in the standard directory and ingests them into MongoDB."""
     client = get_mongo_client()
     db = client[DB_NAME]
 
     if not os.path.exists(DATA_DIR):
-        print(f"Data directory '{DATA_DIR}' does not exist.")
+        logging.warning(f"Data directory '{DATA_DIR}' does not exist.")
         return
 
     for filename in os.listdir(DATA_DIR):
@@ -45,30 +55,33 @@ def ingest_json_files():
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                    if not data:
+                        logging.info(f"Skipping empty JSON file: {filename}")
+                        continue
 
-                # Skip empty or invalid JSON files
-                if not data:
-                    print(f"Skipping empty or invalid JSON file: {filename}")
-                    continue
+                    data = (
+                        [convert_timestamp(doc) for doc in data]
+                        if isinstance(data, list)
+                        else [convert_timestamp(data)]
+                    )
 
-                if isinstance(data, list):
-                    data = [convert_timestamp(doc) for doc in data]
-                    for doc in data:
-                        collection.update_one(doc, {"$set": doc}, upsert=True)
-                elif isinstance(data, dict):
-                    data = convert_timestamp(data)
-                    collection.update_one(data, {"$set": data}, upsert=True)
-                else:
-                    print(f"Skipping unexpected JSON format in {filename}")
-
-                print(
-                    f"Ingested '{filename}' into collection '{collection_name}' with converted timestamps."
-                )
-
-            except json.JSONDecodeError:
-                print(f"Skipping malformed JSON file: {filename}")
+                    if collection.estimated_document_count() == 0:
+                        collection.insert_many(data)
+                        logging.info(
+                            f"Inserted {len(data)} documents into new collection '{collection_name}'."
+                        )
+                    else:
+                        duplicate_count = 0
+                        for doc in data:
+                            if not document_exists(collection, doc):
+                                collection.insert_one(doc)
+                            else:
+                                duplicate_count += 1
+                        logging.info(
+                            f"Skipped {duplicate_count} duplicate documents in '{collection_name}'."
+                        )
             except Exception as e:
-                print(f"Error processing {filename}: {e}")
+                logging.error(f"Error processing {filename}: {e}")
 
     client.close()
 
