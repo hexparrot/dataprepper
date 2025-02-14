@@ -38,6 +38,24 @@ class PokemonGoIngest:
         return data
 
     @staticmethod
+    def rename_fields(data, original, adjusted):
+        """
+        Rename a specified field in all records.
+
+        Parameters:
+        - data (list of dicts): The dataset containing records.
+        - original (str): The original field name to rename.
+        - adjusted (str): The new field name.
+
+        Returns:
+        - list of dicts: Updated dataset with renamed fields.
+        """
+        for record in data:
+            if original in record:
+                record[adjusted] = record.pop(original)
+        return data
+
+    @staticmethod
     def convert_iso_timestamps(data):
         """Convert all timestamp-like fields to ISO 8601 format."""
         timestamp_formats = [
@@ -96,46 +114,73 @@ class PokemonGoIngest:
             print(f"Skipping {filename}: Invalid JSON format")
             return
 
+        def deploy_pokemon(data):
+            """Sequentially process Deploy_Pokemon.json transformations."""
+            data = self.convert_lat_long_fields(data)
+            data = self.convert_iso_timestamps(data)
+            data = self.rename_fields(data, "Timestamp", "timestamp")
+            data = self.rename_fields(data, "Player_Latitude", "latitude")
+            data = self.rename_fields(data, "Player_Longitude", "longitude")
+            return data
+
+        def fitness_data(data):
+            data = self.convert_iso_timestamps(data)
+            data = self.run_pipe_script(data)
+            data = self.rename_fields(
+                data, "Date and time of logging (UTC)", "timestamp"
+            )
+            return data
+
+        def friend_list(data):
+            data = self.convert_iso_timestamps(data)
+            data = self.run_pipe_script(data)
+            data = self.rename_fields(data, "Date of friendship start", "timestamp")
+            return data
+
+        def gameplay_location(data):
+            data = self.convert_iso_timestamps(data)
+            data = self.run_pipe_script(data)
+            data = self.rename_fields(data, "Date and Time", "timestamp")
+            data = self.rename_fields(
+                data, "Latitude of location reported by game", "latitude"
+            )
+            data = self.rename_fields(
+                data, "Longitude of location reported by game", "longitude"
+            )
+            return data
+
         # Define transformation functions
         transformations = {
-            "App_Sessions.json": self.convert_iso_timestamps,
-            "Deploy_Pokemon.json": lambda d: self.convert_iso_timestamps(
-                self.convert_lat_long_fields(d)
+            "App_Sessions.json": lambda d: self.rename_fields(
+                self.convert_iso_timestamps(d), "Event_time", "timestamp"
             ),
-            "GameplayLocationHistory.json": lambda d: self.convert_iso_timestamps(
-                self.run_pipe_script(d)
+            "Deploy_Pokemon.json": deploy_pokemon,
+            "GameplayLocationHistory.json": gameplay_location,
+            "Pokestop_spin.json": deploy_pokemon,
+            "SupportInteractions.json": lambda d: self.rename_fields(
+                self.run_pipe_script(d), "Date and time", "timestamp"
             ),
-            "Pokestop_spin.json": lambda d: self.convert_iso_timestamps(
-                self.convert_lat_long_fields(d)
-            ),
-            "SupportInteractions.json": self.run_pipe_script,
             "User_Attribution_Installs.json": lambda d: d,
             "User_Attribution_Sessions.json": lambda d: d,
-            "Gym_battle.json": self.convert_iso_timestamps,
-            "InAppPurchases.json": self.run_pipe_script,
-            "Incense_encounter.json": self.convert_iso_timestamps,
-            "Join_Raid_lobby.json": lambda d: self.convert_iso_timestamps(
-                self.convert_lat_long_fields(d)
+            "Gym_battle.json": lambda d: self.convert_iso_timestamps(
+                self.rename_fields(d, "Timestamp", "timestamp")
             ),
+            "InAppPurchases.json": lambda d: self.rename_fields(
+                self.run_pipe_script(d), "Date and time", "timestamp"
+            ),
+            "Incense_encounter.json": lambda d: self.convert_iso_timestamps(
+                self.rename_fields(d, "Timestamp", "timestamp")
+            ),
+            "Join_Raid_lobby.json": deploy_pokemon,
             "LiveEventLeaderboard.json": lambda d: d,
             "LiveEventRegistrationHistory_AsPurchaser.json": lambda d: d,
             "LiveEventRegistrationHistory_GiftedOrRedeemedTickets.json": lambda d: d,
             "LiveEventRegistrationHistory_Refund.json": lambda d: d,
-            "Lure_encounter.json": lambda d: self.convert_iso_timestamps(
-                self.convert_lat_long_fields(d)
-            ),
-            "Map_Pokemon_encounter.json": lambda d: self.convert_iso_timestamps(
-                self.convert_lat_long_fields(d)
-            ),
-            "Sfida_capture.json": lambda d: self.convert_iso_timestamps(
-                self.convert_lat_long_fields(d)
-            ),
-            "FriendList.json": lambda d: self.convert_iso_timestamps(
-                self.run_pipe_script(d)
-            ),
-            "FitnessData.json": lambda d: self.convert_iso_timestamps(
-                self.run_pipe_script(d)
-            ),
+            "Lure_encounter.json": deploy_pokemon,
+            "Map_Pokemon_encounter.json": deploy_pokemon,
+            "Sfida_capture.json": deploy_pokemon,
+            "FriendList.json": friend_list,
+            "FitnessData.json": fitness_data,
         }
 
         # Apply transformation if it exists
