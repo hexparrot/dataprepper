@@ -3,6 +3,7 @@ from ariadne.asgi import GraphQL
 from pymongo import MongoClient
 import os
 import logging
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -27,7 +28,7 @@ client = get_mongo_client()
 db = client[DB_NAME]
 query = QueryType()
 
-# Define fixed GraphQL schema
+# Define GraphQL Schema (Adding Triplet & allTriplets Query)
 type_defs = gql(
     """
 type Query {
@@ -47,6 +48,15 @@ type Query {
     getSupportInteractions(limit: Int): [SupportInteractions]
     getUser_Attribution_Installs(limit: Int): [User_Attribution_Installs]
     getUser_Attribution_Sessions(limit: Int): [User_Attribution_Sessions]
+
+    allTriplets: [Triplet]  # New Query to Fetch All Timestamp-Geo Records
+    countTriplets: Int  # New Query to Count Records
+}
+
+type Triplet {
+    timestamp: String
+    latitude: Float
+    longitude: Float
 }
 
 type App_Sessions {
@@ -161,44 +171,91 @@ type User_Attribution_Sessions {
     Type_of_Activity: String
     timestamp: String
 }
+
 """
 )
 
 
-# Resolver functions
-def create_resolver(collection_name):
-    """Creates a resolver for fetching data from MongoDB collections."""
+@query.field("allTriplets")
+def resolve_all_triplets(_, info):
+    """Fetches all records with timestamp, latitude, and longitude from all collections."""
+    merged_data = []
 
-    def resolve(_, info, limit=None):
-        logging.info(f"Fetching data from collection: {collection_name}")
-        results = list(db[collection_name].find({}, {"_id": 0}))
-        logging.info(f"Returned {len(results)} records from {collection_name}")
-        return results[:limit] if limit else results
+    # Collections that may have timestamp, latitude, longitude
+    collections = [
+        "Deploy_Pokemon",
+        "GameplayLocationHistory",
+        "Pokestop_spin",
+        "Join_Raid_lobby",
+        "Lure_encounter",
+        "Map_Pokemon_encounter",
+        "Sfida_capture",
+    ]
 
-    return resolve
+    for collection in collections:
+        logging.info(f"Fetching triplets from {collection}")
+        records = db[collection].find(
+            {}, {"timestamp": 1, "latitude": 1, "longitude": 1, "_id": 0}
+        )
+
+        for record in records:
+            if "timestamp" in record and "latitude" in record and "longitude" in record:
+                # Ensure timestamp is converted to a string
+                timestamp_value = record["timestamp"]
+
+                # Convert datetime to ISO string if necessary
+                if isinstance(timestamp_value, datetime):
+                    timestamp_value = timestamp_value.isoformat()
+
+                merged_data.append(
+                    {
+                        "timestamp": str(timestamp_value),  # Ensure it's a string
+                        "latitude": record["latitude"],
+                        "longitude": record["longitude"],
+                    }
+                )
+
+    # Sort by timestamp (ensure string format)
+    sorted_data = sorted(merged_data, key=lambda x: x["timestamp"])
+
+    logging.info(f"Total triplets returned: {len(sorted_data)}")
+    return sorted_data
 
 
-# Bind resolvers for all collections
-for collection in [
-    "App_Sessions",
-    "Deploy_Pokemon",
-    "FitnessData",
-    "FriendList",
-    "GameplayLocationHistory",
-    "Gym_battle",
-    "InAppPurchases",
-    "Incense_encounter",
-    "Join_Raid_lobby",
-    "Lure_encounter",
-    "Map_Pokemon_encounter",
-    "Pokestop_spin",
-    "Sfida_capture",
-    "SupportInteractions",
-    "User_Attribution_Installs",
-    "User_Attribution_Sessions",
-]:
-    query.set_field(f"get{collection}", create_resolver(collection))
+@query.field("countTriplets")
+def resolve_count_triplets(_, info):
+    """Counts the total number of records with timestamp, latitude, and longitude."""
+    total_count = 0
 
+    collections = [
+        "Deploy_Pokemon",
+        "GameplayLocationHistory",
+        "Pokestop_spin",
+        "Join_Raid_lobby",
+        "Lure_encounter",
+        "Map_Pokemon_encounter",
+        "Sfida_capture",
+    ]
+
+    for collection in collections:
+        logging.info(f"Counting triplets in {collection}")
+
+        count = db[collection].count_documents(
+            {
+                "timestamp": {"$exists": True},
+                "latitude": {"$exists": True},
+                "longitude": {"$exists": True},
+            }
+        )
+
+        total_count += count
+
+    logging.info(f"Total triplet count: {total_count}")
+    return total_count
+
+
+# Register Query Resolvers
 schema = make_executable_schema(type_defs, query)
 app = GraphQL(schema)
-logging.info("GraphQL schema is ready.")
+
+logging.info("GraphQL schema with allTriplets is ready.")
