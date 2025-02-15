@@ -1,141 +1,204 @@
-from datetime import datetime
+from ariadne import QueryType, make_executable_schema, gql
+from ariadne.asgi import GraphQL
 from pymongo import MongoClient
-from ariadne import QueryType, make_executable_schema, gql, ScalarType
+import os
+import logging
 
-# Connect to MongoDB
-client = MongoClient(
-    "mongodb://admin:password@localhost:27017/pokemongo?authSource=admin"
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
 )
-db = client["pokemongo"]
 
-# Define DateTime scalar manually
-datetime_scalar = ScalarType("DateTime")
-
-
-@datetime_scalar.serializer
-def serialize_datetime(value):
-    if isinstance(value, datetime):
-        return value.strftime("%Y-%m-%dT%H:%M:%S")
-    return None
+# MongoDB Connection using environment variables
+MONGO_USER = os.getenv("MONGO_USER", "admin")
+MONGO_PASSWORD = os.getenv("MONGO_PASSWORD", "password")
+MONGO_HOST = os.getenv("MONGO_HOST", "localhost")
+MONGO_PORT = os.getenv("MONGO_PORT", "27017")
+MONGO_URI = f"mongodb://{MONGO_USER}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/admin"
+DB_NAME = "pokemongo"
 
 
-# Define GraphQL Schema
+def get_mongo_client():
+    """Establishes and returns a MongoDB client."""
+    return MongoClient(MONGO_URI)
+
+
+client = get_mongo_client()
+db = client[DB_NAME]
+query = QueryType()
+
+# Define fixed GraphQL schema
 type_defs = gql(
     """
-    scalar DateTime
+type Query {
+    getApp_Sessions(limit: Int): [App_Sessions]
+    getDeploy_Pokemon(limit: Int): [Deploy_Pokemon]
+    getFitnessData(limit: Int): [FitnessData]
+    getFriendList(limit: Int): [FriendList]
+    getGameplayLocationHistory(limit: Int): [GameplayLocationHistory]
+    getGym_battle(limit: Int): [Gym_battle]
+    getInAppPurchases(limit: Int): [InAppPurchases]
+    getIncense_encounter(limit: Int): [Incense_encounter]
+    getJoin_Raid_lobby(limit: Int): [Join_Raid_lobby]
+    getLure_encounter(limit: Int): [Lure_encounter]
+    getMap_Pokemon_encounter(limit: Int): [Map_Pokemon_encounter]
+    getPokestop_spin(limit: Int): [Pokestop_spin]
+    getSfida_capture(limit: Int): [Sfida_capture]
+    getSupportInteractions(limit: Int): [SupportInteractions]
+    getUser_Attribution_Installs(limit: Int): [User_Attribution_Installs]
+    getUser_Attribution_Sessions(limit: Int): [User_Attribution_Sessions]
+}
 
-    type AppSession {
-        attributed_touch_time: DateTime
-        install_time: DateTime
-        event_time: DateTime
-        event_name: String
-        cost_currency: String
-        channel: String
-        install_app_store: String
-        ad_ID: String
-        region: String
-        country_code: String
-        state: String
-        city: String
-        postal_code: Int
-        IP: String
-        operator: String
-        language: String
-        android_ID: String
-        advertising_ID: String
-        IDFA: String
-        IDFV: String
-        amazon_fire_ID: String
-        device_type: String
-        device_category: String
-        platform: String
-        OS_version: Int
-        app_version: String
-        SDK_version: String
-        app_name: String
-        OAID: String
-        conversion_type: String
-        device_model: String
-        ATT: String
-    }
+type App_Sessions {
+    timestamp: String
+    Install_time: String
+    Event_name: String
+    Cost_currency: String
+    Channel: String
+    Install_app_store: String
+}
 
-    type Query {
-        getAppSessions: [AppSession]
-    }
+type Deploy_Pokemon {
+    timestamp: String
+    latitude: Float
+    longitude: Float
+}
+
+type FitnessData {
+    Steps_walked: Int
+    Distance_travelled_meters: Int
+    Calories_burned: Int
+    Exercise_duration_minutes: Int
+    Wheelchair_distance_meters: Int
+    timestamp: String
+}
+
+type FriendList {
+    Friends_codename: String
+    Date_of_first_Niantic_friendship_start: String
+    Nickname: String
+    Games_they_are_Friends_in: String
+    timestamp: String
+}
+
+type GameplayLocationHistory {
+    timestamp: String
+    latitude: Float
+    longitude: Float
+}
+
+type Gym_battle {
+    timestamp: String
+}
+
+type InAppPurchases {
+    Type_of_activity: String
+    Vendor: String
+    Item_purchased: String
+    Number_of_items: String
+    Change_in_pokecoins: Int
+    Money_spent_on_purchase: String
+    Currency: String
+    timestamp: String
+}
+
+type Pokestop_spin {
+    Fort_Latitude: Float
+    Fort_Longitude: Float
+    timestamp: String
+    latitude: Float
+    longitude: Float
+}
+
+type SupportInteractions {
+    Ticket_number_and_title: String
+    Message_content: String
+    timestamp: String
+}
+
+type Incense_encounter {
+    timestamp: String
+}
+
+type Join_Raid_lobby {
+    Gym_Latitude: Float
+    Gym_Longitude: Float
+    timestamp: String
+    latitude: Float
+    longitude: Float
+}
+
+type Lure_encounter {
+    Gym_Latitude: Float
+    Gym_Longitude: Float
+    timestamp: String
+    latitude: Float
+    longitude: Float
+}
+
+type Map_Pokemon_encounter {
+    timestamp: String
+    latitude: Float
+    longitude: Float
+}
+
+type Sfida_capture {
+    Gym_Latitude: String
+    Gym_Longitude: String
+    timestamp: String
+    latitude: Float
+    longitude: Float
+}
+
+type User_Attribution_Installs {
+    Device_IP_Address: String
+    Type_of_Activity: String
+    timestamp: String
+}
+
+type User_Attribution_Sessions {
+    Device_IP_Address: String
+    Type_of_Activity: String
+    timestamp: String
+}
 """
 )
 
-query = QueryType()
+
+# Resolver functions
+def create_resolver(collection_name):
+    """Creates a resolver for fetching data from MongoDB collections."""
+
+    def resolve(_, info, limit=None):
+        logging.info(f"Fetching data from collection: {collection_name}")
+        results = list(db[collection_name].find({}, {"_id": 0}))
+        logging.info(f"Returned {len(results)} records from {collection_name}")
+        return results[:limit] if limit else results
+
+    return resolve
 
 
-# Helper function to parse timestamps safely
-def parse_datetime(value):
-    if isinstance(value, str):
-        value = value.strip()  # Remove whitespace
-        if value == "":  # Handle empty strings
-            return None
-        if value.endswith(" UTC"):
-            try:
-                return datetime.strptime(value, "%Y-%m-%d %H:%M:%S UTC")
-            except ValueError:
-                return None
-    return value
+# Bind resolvers for all collections
+for collection in [
+    "App_Sessions",
+    "Deploy_Pokemon",
+    "FitnessData",
+    "FriendList",
+    "GameplayLocationHistory",
+    "Gym_battle",
+    "InAppPurchases",
+    "Incense_encounter",
+    "Join_Raid_lobby",
+    "Lure_encounter",
+    "Map_Pokemon_encounter",
+    "Pokestop_spin",
+    "Sfida_capture",
+    "SupportInteractions",
+    "User_Attribution_Installs",
+    "User_Attribution_Sessions",
+]:
+    query.set_field(f"get{collection}", create_resolver(collection))
 
-
-# Helper function to parse integers safely
-def parse_int(value):
-    try:
-        return int(value)
-    except (ValueError, TypeError):
-        return None
-
-
-# Resolver function to fetch all records from app_sessions
-@query.field("getAppSessions")
-def resolve_get_app_sessions(_, info):
-    collection = db["app_sessions"]
-    results = list(collection.find({}, {"_id": 0}))  # Exclude MongoDB's _id field
-
-    for record in results:
-        record["attributed_touch_time"] = parse_datetime(
-            record.get("Attributed_touch_time", None)
-        )
-        record["install_time"] = parse_datetime(record.get("Install_time", None))
-        record["event_time"] = parse_datetime(record.get("Event_time", None))
-        record["event_name"] = record.get("Event_name", None)
-        record["cost_currency"] = record.get("Cost_currency", None)
-        record["channel"] = record.get("Channel", None)
-        record["install_app_store"] = record.get("Install_app_store", None)
-        record["ad_ID"] = record.get("Ad_ID", None)
-        record["region"] = record.get("Region", None)
-        record["country_code"] = record.get("Country_code", None)
-        record["state"] = record.get("State", None)
-        record["city"] = record.get("City", None)
-        record["postal_code"] = parse_int(record.get("Postal_code", None))
-        record["IP"] = record.get("IP", None)
-        record["operator"] = record.get("Operator", None)
-        record["language"] = record.get("Language", None)
-
-        # Fix missing fields (Correct case-sensitive MongoDB field names)
-        record["android_ID"] = record.get("Android_ID", None)
-        record["advertising_ID"] = record.get("Advertising_ID", None)
-        record["IDFA"] = record.get("IDFA", None)
-        record["IDFV"] = record.get("IDFV", None)
-        record["amazon_fire_ID"] = record.get("Amazon_Fire_ID", None)
-        record["device_type"] = record.get("Device_type", None)
-        record["device_category"] = record.get("Device_category", None)
-        record["platform"] = record.get("Platform", None)
-        record["OS_version"] = parse_int(record.get("OS_version", None))
-        record["app_version"] = record.get("App_version", None)
-        record["SDK_version"] = record.get("SDK_version", None)
-        record["app_name"] = record.get("App_name", None)
-        record["OAID"] = record.get("OAID", None)
-        record["conversion_type"] = record.get("Conversion_type", None)
-        record["device_model"] = record.get("Device_model", None)
-        record["ATT"] = record.get("ATT", None)
-
-    return results
-
-
-# Create executable schema
-schema = make_executable_schema(type_defs, query, datetime_scalar)
+schema = make_executable_schema(type_defs, query)
+app = GraphQL(schema)
+logging.info("GraphQL schema is ready.")
