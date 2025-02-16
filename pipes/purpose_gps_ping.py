@@ -72,12 +72,12 @@ class PokemonGoLocationPingPipe(LocationPingPipe):
                 "timestamp": timestamp_iso,
                 "latitude": latitude,
                 "longitude": longitude,
-                "author": "User",
-                "detail": detail,
-                "product": "Pokemon GO",
                 "metadata": {
                     "processedBy": "PokemonGoLocationPingPipe_v1",
                     "processingTimestamp": datetime.now(timezone.utc).isoformat(),
+                    "author": "User",
+                    "detail": detail,
+                    "product": "Pokemon GO",
                 },
             }
         except Exception as e:
@@ -135,12 +135,12 @@ class ExifLocationPingPipe(LocationPingPipe):
                 "timestamp": timestamp_iso,
                 "latitude": latitude,
                 "longitude": longitude,
-                "author": "User",
-                "detail": detail,
-                "product": "CameraGPS",
                 "metadata": {
                     "processedBy": "ExifLocationPingPipe_v1",
                     "processingTimestamp": datetime.now(timezone.utc).isoformat(),
+                    "author": "User",
+                    "detail": detail,
+                    "product": "CameraGPS",
                 },
             }
         except Exception as e:
@@ -193,12 +193,12 @@ class LyftGPSPingPipe(BaseJSONPipe):
                     "timestamp": timestamp_iso,
                     "latitude": entry["requested_lat"],
                     "longitude": entry["requested_lng"],
-                    "detail": f"Rideshare interaction on {self.convert_to_human_readable_time(timestamp_iso)}",
-                    "author": "User",
-                    "product": "Lyft",
                     "metadata": {
                         "processedBy": "LyftGPSPingPipe_v1",
                         "processingTimestamp": datetime.now(timezone.utc).isoformat(),
+                        "detail": f"Rideshare interaction on {self.convert_to_human_readable_time(timestamp_iso)}",
+                        "author": "User",
+                        "product": "Lyft",
                     },
                 }
             )
@@ -212,12 +212,12 @@ class LyftGPSPingPipe(BaseJSONPipe):
                     "timestamp": timestamp_iso,
                     "latitude": entry["pickup_lat"],
                     "longitude": entry["pickup_lng"],
-                    "detail": f"Rideshare interaction on {self.convert_to_human_readable_time(timestamp_iso)} in {location}",
-                    "author": "User",
-                    "product": "Lyft",
                     "metadata": {
                         "processedBy": "LyftGPSPingPipe_v1",
                         "processingTimestamp": datetime.now(timezone.utc).isoformat(),
+                        "detail": f"Rideshare interaction on {self.convert_to_human_readable_time(timestamp_iso)} in {location}",
+                        "author": "User",
+                        "product": "Lyft",
                     },
                 }
             )
@@ -231,12 +231,12 @@ class LyftGPSPingPipe(BaseJSONPipe):
                     "timestamp": timestamp_iso,
                     "latitude": entry["dropoff_lat"],
                     "longitude": entry["dropoff_lng"],
-                    "detail": f"Rideshare interaction on {self.convert_to_human_readable_time(timestamp_iso)} in {location}",
-                    "author": "User",
-                    "product": "Lyft",
                     "metadata": {
                         "processedBy": "LyftGPSPingPipe_v1",
                         "processingTimestamp": datetime.now(timezone.utc).isoformat(),
+                        "detail": f"Rideshare interaction on {self.convert_to_human_readable_time(timestamp_iso)} in {location}",
+                        "author": "User",
+                        "product": "Lyft",
                     },
                 }
             )

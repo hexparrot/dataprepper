@@ -1,8 +1,8 @@
 import os
 import json
-import csv
 import logging
 from structs.base_record import BaseRecord
+from xform.csv_parser import CSVParser  # Import CSVParser
 
 # Configure logging format
 logging.basicConfig(
@@ -25,6 +25,7 @@ class CSVRecord(BaseRecord):
         self.input_dir = os.path.abspath(input_dir)
         self.output_root = os.path.abspath(output_dir)
         os.makedirs(self.output_root, exist_ok=True)
+        self.parser = CSVParser()  # Initialize CSVParser
 
     def parse(self, raw_data):
         """
@@ -35,12 +36,12 @@ class CSVRecord(BaseRecord):
 
     def process_csv_file(self, csv_path: str, json_path: str):
         """
-        Reads a CSV/TSV file and converts it to JSON.
+        Reads a CSV/TSV file and converts it to JSON using CSVParser.
         """
         try:
             with open(csv_path, "r", encoding="utf-8") as csv_file:
-                reader = csv.DictReader(csv_file)
-                records = list(reader)  # Keep CSV structure as-is
+                csv_content = csv_file.read()
+                records = self.parser.parse(csv_content)  # Use CSVParser
 
             self.save_to_file(json_path, records)
             logging.info(f"Successfully processed CSV file: {csv_path}")

@@ -1,0 +1,12 @@
+{
+    "pokemongo": {
+        "Deploy_Pokemon": {"timestamp": "Timestamp", "latitude": "Player_Latitude", "longitude": "Player_Longitude"},
+        "GameplayLocationHistory": {"timestamp": "Date_and_Time", "latitude": "Latitude_of_location_reported_by_game", "longitude": "Longitude_of_location_reported_by_game"},
+        "Join_Raid_lobby": {"timestamp": "Timestamp", "latitude": "Player_Latitude", "longitude": "Player_Longitude"},
+        "Lure_encounter": {"timestamp": "Timestamp", "latitude": "Player_Latitude", "longitude": "Player_Longitude"},
+        "Map_Pokemon_encounter": {"timestamp": "Timestamp", "latitude": "Player_Latitude", "longitude": "Player_Longitude"},
+        "Pokestop_spin": {"timestamp": "Timestamp", "latitude": "Player_Latitude", "longitude": "Player_Longitude"},
+        "Sfida_capture": {"timestamp": "Timestamp", "latitude": "Player_Latitude", "longitude": "Player_Longitude"}
+    }
+}
+

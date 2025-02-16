@@ -10,8 +10,8 @@ from datetime import datetime
 class PokemonGoIngest:
     """Handles the ingestion and transformation of Niantic JSON data."""
 
-    SOURCE_PATH = "userdata/transformed/niantic"
-    OUTPUT_PATH = "userdata/purposed/niantic"
+    SOURCE_PATH = "userdata/transformed/pokemongo"
+    OUTPUT_PATH = "userdata/purposed/pokemongo"
     PIPE_SCRIPT = "pipes/rewrite_niantic_aggregate_pipe.py"
 
     def __init__(self):
@@ -118,59 +118,35 @@ class PokemonGoIngest:
             """Sequentially process Deploy_Pokemon.json transformations."""
             data = self.convert_lat_long_fields(data)
             data = self.convert_iso_timestamps(data)
-            data = self.rename_fields(data, "Timestamp", "timestamp")
-            data = self.rename_fields(data, "Player_Latitude", "latitude")
-            data = self.rename_fields(data, "Player_Longitude", "longitude")
             return data
 
         def fitness_data(data):
             data = self.convert_iso_timestamps(data)
             data = self.run_pipe_script(data)
-            data = self.rename_fields(
-                data, "Date and time of logging (UTC)", "timestamp"
-            )
             return data
 
         def friend_list(data):
             data = self.convert_iso_timestamps(data)
             data = self.run_pipe_script(data)
-            data = self.rename_fields(data, "Date of friendship start", "timestamp")
             return data
 
         def gameplay_location(data):
             data = self.convert_iso_timestamps(data)
             data = self.run_pipe_script(data)
-            data = self.rename_fields(data, "Date and Time", "timestamp")
-            data = self.rename_fields(
-                data, "Latitude of location reported by game", "latitude"
-            )
-            data = self.rename_fields(
-                data, "Longitude of location reported by game", "longitude"
-            )
             return data
 
         # Define transformation functions
         transformations = {
-            "App_Sessions.json": lambda d: self.rename_fields(
-                self.convert_iso_timestamps(d), "Event_time", "timestamp"
-            ),
+            "App_Sessions.json": self.convert_iso_timestamps,
             "Deploy_Pokemon.json": deploy_pokemon,
             "GameplayLocationHistory.json": gameplay_location,
             "Pokestop_spin.json": deploy_pokemon,
-            "SupportInteractions.json": lambda d: self.rename_fields(
-                self.run_pipe_script(d), "Date and time", "timestamp"
-            ),
+            "SupportInteractions.json": self.run_pipe_script,
             "User_Attribution_Installs.json": lambda d: d,
             "User_Attribution_Sessions.json": lambda d: d,
-            "Gym_battle.json": lambda d: self.convert_iso_timestamps(
-                self.rename_fields(d, "Timestamp", "timestamp")
-            ),
-            "InAppPurchases.json": lambda d: self.rename_fields(
-                self.run_pipe_script(d), "Date and time", "timestamp"
-            ),
-            "Incense_encounter.json": lambda d: self.convert_iso_timestamps(
-                self.rename_fields(d, "Timestamp", "timestamp")
-            ),
+            "Gym_battle.json": self.convert_iso_timestamps,
+            "InAppPurchases.json": self.run_pipe_script,
+            "Incense_encounter.json": self.convert_iso_timestamps,
             "Join_Raid_lobby.json": deploy_pokemon,
             "LiveEventLeaderboard.json": lambda d: d,
             "LiveEventRegistrationHistory_AsPurchaser.json": lambda d: d,

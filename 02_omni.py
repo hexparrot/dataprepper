@@ -186,7 +186,7 @@ PARSERS = {
     "fitbit": parse_csv_json,
     "lyft": parse_csv,
     "netflix": parse_csv,
-    "niantic": parse_csv,
+    "pokemongo": parse_csv,
     "reddit": parse_csv,
     "spotify": parse_json,
     "waze": parse_waze,
