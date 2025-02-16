@@ -13,10 +13,12 @@ class DataIngest:
     SOURCE_PATHS = {
         "pokemongo": "userdata/transformed/pokemongo",
         "lyft": "userdata/transformed/lyft",
+        "waze": "userdata/transformed/waze",
     }
     OUTPUT_PATHS = {
         "pokemongo": "userdata/purposed/pokemongo",
         "lyft": "userdata/purposed/lyft",
+        "waze": "userdata/purposed/waze",
     }
     PIPE_SCRIPT = "pipes/rewrite_pipe_of_sorts.py"
 
@@ -25,12 +27,17 @@ class DataIngest:
         "Date and time of logging (UTC)",
         "Date and Time",
         "Date and time",
+        "Event Date",
+        "Date",
+        "Login Time",
+        "Logout Time",
     }
     TIMESTAMP_SUFFIXES = {"_at", "_timestamp", "_time", "friendship start"}
     TIMESTAMP_FORMATS = [
         "%m/%d/%Y %H:%M:%S UTC",
         "%Y-%m-%d %H:%M:%S.%f UTC",
         "%Y-%m-%d %H:%M:%S UTC",
+        "%Y-%m-%d %H:%M:%S GMT",
         "%Y-%m-%dT%H:%M:%S.%fZ",
         "%Y-%m-%dT%H:%M:%S.%f",
         "%Y-%m-%dT%H:%M:%S",
@@ -54,6 +61,7 @@ class DataIngest:
         self.aggregated_data = {
             "pokemongo": defaultdict(list),
             "lyft": defaultdict(list),
+            "waze": defaultdict(list),
         }
 
     def convert_lat_long_fields(self, data):
@@ -141,7 +149,7 @@ class DataIngest:
 
     def run(self):
         """Run the full ingestion process for both datasets."""
-        for dataset in ["pokemongo", "lyft"]:
+        for dataset in ["pokemongo", "lyft", "waze"]:
             self.process_files(dataset)
             self.write_output(dataset)
 
