@@ -12,7 +12,7 @@ class PokemonGoIngest:
 
     SOURCE_PATH = "userdata/transformed/pokemongo"
     OUTPUT_PATH = "userdata/purposed/pokemongo"
-    PIPE_SCRIPT = "pipes/rewrite_niantic_aggregate_pipe.py"
+    PIPE_SCRIPT = "pipes/rewrite_pipe_of_sorts.py"
 
     def __init__(self):
         """Initialize output directory and aggregated data store."""
@@ -122,17 +122,14 @@ class PokemonGoIngest:
 
         def fitness_data(data):
             data = self.convert_iso_timestamps(data)
-            data = self.run_pipe_script(data)
             return data
 
         def friend_list(data):
             data = self.convert_iso_timestamps(data)
-            data = self.run_pipe_script(data)
             return data
 
         def gameplay_location(data):
             data = self.convert_iso_timestamps(data)
-            data = self.run_pipe_script(data)
             return data
 
         # Define transformation functions
@@ -141,11 +138,11 @@ class PokemonGoIngest:
             "Deploy_Pokemon.json": deploy_pokemon,
             "GameplayLocationHistory.json": gameplay_location,
             "Pokestop_spin.json": deploy_pokemon,
-            "SupportInteractions.json": self.run_pipe_script,
+            "SupportInteractions.json": lambda d: d,
             "User_Attribution_Installs.json": lambda d: d,
             "User_Attribution_Sessions.json": lambda d: d,
             "Gym_battle.json": self.convert_iso_timestamps,
-            "InAppPurchases.json": self.run_pipe_script,
+            "InAppPurchases.json": lambda d: d,
             "Incense_encounter.json": self.convert_iso_timestamps,
             "Join_Raid_lobby.json": deploy_pokemon,
             "LiveEventLeaderboard.json": lambda d: d,
