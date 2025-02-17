@@ -28,6 +28,8 @@ class DataIngest:
         "Date and Time",
         "Date and time",
         "Event Date",
+        "Entry Date",
+        "Last Login",
         "Date",
         "Login Time",
         "Logout Time",
@@ -132,11 +134,52 @@ class DataIngest:
     def process_files(self, dataset):
         """Process all JSON files in the source directory."""
         source_path = self.SOURCE_PATHS[dataset]
+        output_path = self.OUTPUT_PATHS[dataset]
+
         for filename in os.listdir(source_path):
             input_filepath = os.path.join(source_path, filename)
+
             if not filename.endswith(".json"):
                 continue  # Skip non-JSON files
-            self.transform(dataset, input_filepath)
+
+            # Special handling for "waze/general_info.json"
+            if dataset == "waze" and filename == "general_info.json":
+                output_filepath = os.path.join(output_path, filename)
+                filename = os.path.basename(input_filepath)
+                base_filename = re.sub(r"\d+", "", filename).strip()
+
+                try:
+                    # Read the original JSON content
+                    with open(input_filepath, "r", encoding="utf-8") as f:
+                        original_data = json.load(f)
+
+                    # Process through rewrite_transpose.py
+                    result = subprocess.run(
+                        ["./pipes/rewrite_transpose.py"],
+                        input=json.dumps(original_data, indent=4),
+                        text=True,
+                        capture_output=True,
+                        check=True,
+                    )
+
+                    # Load the modified JSON
+                    processed_data = json.loads(result.stdout)
+
+                    # Apply transformations
+                    processed_data = self.convert_lat_long_fields(processed_data)
+                    processed_data = self.convert_iso_timestamps(processed_data)
+
+                    # Write transformed data
+                    with open(output_filepath, "w", encoding="utf-8") as f:
+                        json.dump(processed_data, f, indent=4)
+
+                    print(f"Post-processed: {filename} → {output_filepath}")
+                except subprocess.CalledProcessError as e:
+                    print(f"Error processing {filename} with rewrite_transpose.py: {e}")
+
+            else:
+                # Process all other JSON files normally
+                self.transform(dataset, input_filepath)
 
     def write_output(self, dataset):
         """Write all aggregated output files to the destination directory."""
@@ -148,28 +191,6 @@ class DataIngest:
             with open(output_filepath, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4)
             print(f"Aggregated and saved: {base_filename} → {output_filepath}")
-
-            # If the file is "general_info.json", process it through rewrite_transpose.py
-            if dataset == "waze" and base_filename == "general_info.json":
-                try:
-                    result = subprocess.run(
-                        ["./pipes/rewrite_transpose.py"],
-                        input=json.dumps(data, indent=4),
-                        text=True,
-                        capture_output=True,
-                        check=True,
-                    )
-
-                    # Save the processed data
-                    with open(output_filepath, "w", encoding="utf-8") as f:
-                        f.write(result.stdout)
-
-                    print(f"Post-processed: {base_filename} → {output_filepath}")
-
-                except subprocess.CalledProcessError as e:
-                    print(
-                        f"Error processing {base_filename} with rewrite_transpose.py: {e}"
-                    )
 
     def run(self):
         """Run the full ingestion process for both datasets."""
