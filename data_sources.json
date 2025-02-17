@@ -14,6 +14,10 @@
             "pickup": {"timestamp": "pickup_timestamp", "latitude": "pickup_lat", "longitude": "pickup_lng"},
             "dropoff": {"timestamp": "dropoff_timestamp", "latitude": "dropoff_lat", "longitude": "dropoff_lng"}
         }
+    },
+    "waze": {
+        "location_details": { "timestamp": "timestamp", "latitude": "latitude", "longitude": "longitude"
+        }
     }
 }
 

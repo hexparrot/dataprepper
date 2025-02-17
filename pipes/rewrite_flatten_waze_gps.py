@@ -71,7 +71,7 @@ class WazeGPSPipe(BaseJSONPipe):
                         "latitude": lat,
                         "longitude": lon,
                         "metadata": {
-                            "processedBy": "LyftGPSPingPipe_v1",
+                            "processedBy": "WazeGPSPingPipe_v1",
                             "processingTimestamp": datetime.now(
                                 timezone.utc
                             ).isoformat(),
