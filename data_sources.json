@@ -9,7 +9,11 @@
         "Sfida_capture": {"timestamp": "Timestamp", "latitude": "Player_Latitude", "longitude": "Player_Longitude"}
     },
     "lyft": {
-        "passenger_rides": {"timestamp": "requested_timestamp", "latitude": "requested_lat", "longitude": "requested_lng"}
+        "passenger_rides": {
+            "requested": {"timestamp": "requested_timestamp", "latitude": "requested_lat", "longitude": "requested_lng"},
+            "pickup": {"timestamp": "pickup_timestamp", "latitude": "pickup_lat", "longitude": "pickup_lng"},
+            "dropoff": {"timestamp": "dropoff_timestamp", "latitude": "dropoff_lat", "longitude": "dropoff_lng"}
+        }
     }
 }
 
