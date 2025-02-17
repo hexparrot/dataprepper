@@ -3,8 +3,16 @@ import os
 import json
 import re
 import subprocess
+import logging
 from collections import defaultdict
 from datetime import datetime
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 class DataIngest:
@@ -126,7 +134,7 @@ class DataIngest:
             with open(json_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except json.JSONDecodeError:
-            print(f"Skipping {filename}: Invalid JSON format")
+            logging.warning(f"Skipping {filename}: Invalid JSON format")
             return
 
         data = self.convert_lat_long_fields(data)
@@ -146,6 +154,7 @@ class DataIngest:
 
             # Special handling for "waze/general_info.json"
             if dataset == "waze" and filename == "general_info.json":
+                logging.info(f"Handling edge-case file: {filename}")
                 output_filepath = os.path.join(output_path, filename)
                 filename = os.path.basename(input_filepath)
                 base_filename = re.sub(r"\d+", "", filename).strip()
@@ -175,10 +184,13 @@ class DataIngest:
                     with open(output_filepath, "w", encoding="utf-8") as f:
                         json.dump(processed_data, f, indent=4)
 
-                    print(f"Post-processed: {filename} → {output_filepath}")
+                    logging.info(f"Post-processed: {filename} → {output_filepath}")
                 except subprocess.CalledProcessError as e:
-                    print(f"Error processing {filename} with rewrite_transpose.py: {e}")
+                    logging.error(
+                        f"Error processing {filename} with rewrite_transpose.py: {e}"
+                    )
             elif dataset == "waze" and filename == "search_history.json":
+                logging.info(f"Handling edge-case file: {filename}")
                 output_filepath = os.path.join(output_path, filename)
                 filename = os.path.basename(input_filepath)
                 base_filename = re.sub(r"\d+", "", filename).strip()
@@ -213,11 +225,11 @@ class DataIngest:
                     processed_data = self.convert_iso_timestamps(processed_data)
 
                 except TypeError as e:
-                    print(
+                    logging.error(
                         f"Error processing {filename} with rewrite_fieldnames.py: {e}"
                     )
                 except subprocess.CalledProcessError as e:
-                    print(
+                    logging.error(
                         f"Error processing {filename} with rewrite_fieldnames.py: {e}"
                     )
                 else:
@@ -246,13 +258,13 @@ class DataIngest:
                     processed_data = [
                         record for record in processed_data if is_valid_lat_long(record)
                     ]
-                    print(
+                    logging.warning(
                         f"Dropped {record_count - len(processed_data)} invalid records."
                     )
                     with open(output_filepath, "w", encoding="utf-8") as f:
                         json.dump(processed_data, f, indent=4)
 
-                    print(f"Post-processed: {filename} → {output_filepath}")
+                    logging.info(f"Post-processed: {filename} → {output_filepath}")
             else:
                 # Process all other JSON files normally
                 self.transform(dataset, input_filepath)
@@ -266,7 +278,7 @@ class DataIngest:
             # Write JSON normally
             with open(output_filepath, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4)
-            print(f"Aggregated and saved: {base_filename} → {output_filepath}")
+            logging.info(f"Saved: {base_filename} → {output_filepath}")
 
     def run(self):
         """Run the full ingestion process for both datasets."""
