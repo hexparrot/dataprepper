@@ -24,6 +24,7 @@ class DataIngest:
 
     TIMESTAMP_FIELDS = {
         "Timestamp",
+        "timestamp",
         "Date and time of logging (UTC)",
         "Date and Time",
         "Date and time",
@@ -43,6 +44,7 @@ class DataIngest:
         "%Y-%m-%dT%H:%M:%S.%fZ",
         "%Y-%m-%dT%H:%M:%S.%f",
         "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%dT%H:%M:%S%z",
         "%Y-%m-%d %H:%M:%S.%f",  # Added format for call_completed_at
     ]
@@ -176,7 +178,81 @@ class DataIngest:
                     print(f"Post-processed: {filename} → {output_filepath}")
                 except subprocess.CalledProcessError as e:
                     print(f"Error processing {filename} with rewrite_transpose.py: {e}")
+            elif dataset == "waze" and filename == "search_history.json":
+                output_filepath = os.path.join(output_path, filename)
+                filename = os.path.basename(input_filepath)
+                base_filename = re.sub(r"\d+", "", filename).strip()
 
+                try:
+                    # Read the original JSON content
+                    with open(input_filepath, "r", encoding="utf-8") as f:
+                        original_data = json.load(f)
+
+                    # Process through rewrite_transpose.py
+                    field_names = [
+                        "timestamp",
+                        "search_terms",
+                        "latitude",
+                        "longitude",
+                    ]  # Example field names
+
+                    result = subprocess.run(
+                        ["./pipes/rewrite_fieldnames.py"]
+                        + field_names,  # Pass field names as arguments
+                        input=json.dumps(original_data, indent=4),
+                        text=True,
+                        capture_output=True,
+                        check=True,
+                    )
+
+                    # Load the modified JSON
+                    processed_data = json.loads(result.stdout)
+
+                    # Apply transformations
+                    processed_data = self.convert_lat_long_fields(processed_data)
+                    processed_data = self.convert_iso_timestamps(processed_data)
+
+                except TypeError as e:
+                    print(
+                        f"Error processing {filename} with rewrite_fieldnames.py: {e}"
+                    )
+                except subprocess.CalledProcessError as e:
+                    print(
+                        f"Error processing {filename} with rewrite_fieldnames.py: {e}"
+                    )
+                else:
+                    # define a local test
+                    def is_valid_lat_long(record):
+                        """Checks if the record has valid numerical latitude and longitude."""
+                        try:
+                            lat = record.get("latitude")
+                            lon = record.get("longitude")
+
+                            # Ensure latitude & longitude are present and convertible to float
+                            if lat is None or lon is None:
+                                return False
+
+                            lat = float(lat)
+                            lon = float(lon)
+
+                            # Ensure they are within valid geographic bounds
+                            return -90 <= lat <= 90 and -180 <= lon <= 180
+
+                        except (ValueError, TypeError):
+                            return False  # Non-numeric or invalid data
+
+                    # Write transformed data
+                    record_count = len(processed_data)
+                    processed_data = [
+                        record for record in processed_data if is_valid_lat_long(record)
+                    ]
+                    print(
+                        f"Dropped {record_count - len(processed_data)} invalid records."
+                    )
+                    with open(output_filepath, "w", encoding="utf-8") as f:
+                        json.dump(processed_data, f, indent=4)
+
+                    print(f"Post-processed: {filename} → {output_filepath}")
             else:
                 # Process all other JSON files normally
                 self.transform(dataset, input_filepath)
