@@ -96,15 +96,18 @@ class WazeCSVRecord(CSVRecord):
         stanzas = self._split_stanzas()
 
         for stanza_name, stanza_data in stanzas.items():
+            stanza_name = stanza_name.lstrip("\ufeff")
             logging.info(f"Processing Waze stanza: {stanza_name}")
 
             temp_csv_path = os.path.join(self.output_root, f"{stanza_name}.csv")
             json_path = os.path.join(self.output_root, f"{stanza_name}.json")
 
             try:
-                # Save stanza data as a valid CSV
+                # Save stanza data as a valid CSV, ensuring no BOM
                 with open(temp_csv_path, "w", encoding="utf-8") as temp_csv:
-                    temp_csv.write("\n".join(stanza_data))
+                    temp_csv.write(
+                        "\n".join(stanza_data).lstrip("\ufeff")
+                    )  # Ensure no BOM
 
                 # Use existing CSV processing method
                 self.process_csv_file(temp_csv_path, json_path)
@@ -132,7 +135,9 @@ class WazeCSVRecord(CSVRecord):
             for file in files:
                 if file.endswith(".csv"):
                     file_path = os.path.join(root, file)
-                    with open(file_path, "r", encoding="utf-8") as f:
+                    with open(
+                        file_path, "r", encoding="utf-8-sig"
+                    ) as f:  # Strip BOM automatically
                         for line in f:
                             line = line.strip()
 
@@ -148,7 +153,9 @@ class WazeCSVRecord(CSVRecord):
                             ):  # First line is the stanza name
                                 current_stanza_name = line.replace(" ", "_").lower()
                             else:
-                                current_stanza_data.append(line)
+                                current_stanza_data.append(
+                                    line.lstrip("\ufeff")
+                                )  # Remove BOM if present
 
         if current_stanza_name and current_stanza_data:
             stanzas[current_stanza_name] = current_stanza_data  # Final stanza

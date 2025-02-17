@@ -143,9 +143,33 @@ class DataIngest:
         output_path = self.OUTPUT_PATHS[dataset]
         for base_filename, data in self.aggregated_data[dataset].items():
             output_filepath = os.path.join(output_path, base_filename)
+
+            # Write JSON normally
             with open(output_filepath, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4)
             print(f"Aggregated and saved: {base_filename} → {output_filepath}")
+
+            # If the file is "general_info.json", process it through rewrite_transpose.py
+            if dataset == "waze" and base_filename == "general_info.json":
+                try:
+                    result = subprocess.run(
+                        ["./pipes/rewrite_transpose.py"],
+                        input=json.dumps(data, indent=4),
+                        text=True,
+                        capture_output=True,
+                        check=True,
+                    )
+
+                    # Save the processed data
+                    with open(output_filepath, "w", encoding="utf-8") as f:
+                        f.write(result.stdout)
+
+                    print(f"Post-processed: {base_filename} → {output_filepath}")
+
+                except subprocess.CalledProcessError as e:
+                    print(
+                        f"Error processing {base_filename} with rewrite_transpose.py: {e}"
+                    )
 
     def run(self):
         """Run the full ingestion process for both datasets."""
