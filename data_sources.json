@@ -7,6 +7,9 @@
         "Map_Pokemon_encounter": {"timestamp": "Timestamp", "latitude": "Player_Latitude", "longitude": "Player_Longitude"},
         "Pokestop_spin": {"timestamp": "Timestamp", "latitude": "Player_Latitude", "longitude": "Player_Longitude"},
         "Sfida_capture": {"timestamp": "Timestamp", "latitude": "Player_Latitude", "longitude": "Player_Longitude"}
+    },
+    "lyft": {
+        "passenger_rides": {"timestamp": "requested_timestamp", "latitude": "requested_lat", "longitude": "requested_lng"}
     }
 }
 

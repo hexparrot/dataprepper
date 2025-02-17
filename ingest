@@ -48,8 +48,9 @@ def convert_timestamp(doc):
             if "timestamp" in key.lower():  # Catch variations like 'Timestamp'
                 try:
                     doc[key] = datetime.fromisoformat(doc[key].replace("Z", "+00:00"))
-                except (ValueError, TypeError):
-                    pass
+                except (ValueError, TypeError, AttributeError):
+                    logging.debug(f"No conversion possible for {key}: {doc[key]}")
+                    # this can happen for canceled rides
     return doc
 
 
