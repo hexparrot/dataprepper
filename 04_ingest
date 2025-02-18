@@ -88,7 +88,7 @@ def ingest_json_files():
                     with open(file_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
                         if not data:
-                            logging.info(f"Skipping empty JSON file: {filename}")
+                            logging.info(f"Skipping empty .json file: {filename}")
                             continue
 
                         # Apply sanitization and timestamp conversion
@@ -112,7 +112,7 @@ def ingest_json_files():
                         if collection.estimated_document_count() == 0:
                             collection.insert_many(data)
                             logging.info(
-                                f"Inserted {len(data)} documents into new collection '{collection_name}'."
+                                f"Inserted {len(data):6d} documents into new collection '{collection_name}'."
                             )
                         else:
                             duplicate_count = 0
@@ -122,7 +122,7 @@ def ingest_json_files():
                                 else:
                                     duplicate_count += 1
                             logging.info(
-                                f"Skipped {duplicate_count} duplicate documents in '{collection_name}'."
+                                f"Skipped  {duplicate_count:6d} duplicate documents in '{collection_name}'."
                             )
 
                 except Exception as e:

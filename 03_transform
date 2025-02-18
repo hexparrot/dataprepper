@@ -233,7 +233,7 @@ class DataIngest:
                         f"Error processing {filename} with rewrite_fieldnames.py: {e}"
                     )
                 else:
-                    # define a local test
+                    # Define a local test
                     def is_valid_lat_long(record):
                         """Checks if the record has valid numerical latitude and longitude."""
                         try:
@@ -272,16 +272,33 @@ class DataIngest:
     def write_output(self, dataset):
         """Write all aggregated output files to the destination directory."""
         output_path = self.OUTPUT_PATHS[dataset]
+
+        # Gather all base filenames for this dataset from aggregated data
+        base_filenames = list(self.aggregated_data[dataset].keys())
+
+        # Local function to compute dynamic width based on average length of filenames,
+        # disregarding the 2 longest files.
+        def compute_dynamic_width(filenames):
+            if not filenames:
+                return 50  # default width if no files are found
+            if len(filenames) <= 2:
+                return max(len(name) for name in filenames)
+            lengths = sorted(len(name) for name in filenames)
+            trimmed = lengths[-2]  # base on 2 longest filename
+            return trimmed
+
+        dynamic_width = compute_dynamic_width(base_filenames)
+
         for base_filename, data in self.aggregated_data[dataset].items():
             output_filepath = os.path.join(output_path, base_filename)
 
             # Write JSON normally
             with open(output_filepath, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4)
-            logging.info(f"Saved: {base_filename} → {output_filepath}")
+            logging.info(f"Saved: {base_filename:<{dynamic_width}} → {output_filepath}")
 
     def run(self):
-        """Run the full ingestion process for both datasets."""
+        """Run the full ingestion process for all datasets."""
         for dataset in ["pokemongo", "lyft", "waze"]:
             self.process_files(dataset)
             self.write_output(dataset)
