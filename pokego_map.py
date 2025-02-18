@@ -12,11 +12,22 @@ GRAPHQL_ENDPOINT = "http://localhost:8000/graphql"
 # 📡 GraphQL Query to fetch all triplets
 query = """
 query {
-  allTriplets {
+  pokemongoTriplets: allTriplets(database: "pokemongo") {
     timestamp
     latitude
     longitude
   }
+  wazeTriplets: allTriplets(database: "waze") {
+    timestamp
+    latitude
+    longitude
+  }
+  lyftTriplets: allTriplets(database: "lyft") {
+    timestamp
+    latitude
+    longitude
+  }
+
 }
 """
 
@@ -29,16 +40,48 @@ response = requests.post(
 
 if response.status_code == 200:
     data = response.json()
-    triplets = data["data"]["allTriplets"]
+    triplets = data["data"]
 else:
     print(f"Error: {response.status_code}, {response.text}")
     exit()
 
+# 🕒 Combine all triplets into a single list
+all_triplets = []
+# Combine triplets from Waze
+if "wazeTriplets" in triplets:
+    all_triplets.extend(triplets["wazeTriplets"])
+
+# Combine triplets from Lyft
+if "lyftTriplets" in triplets:
+    all_triplets.extend(triplets["lyftTriplets"])
+
+# Combine triplets from Pokemongo
+if "pokemongoTriplets" in triplets:
+    all_triplets.extend(triplets["pokemongoTriplets"])
+
+# Purge invalids
+all_triplets = [
+    i
+    for i in all_triplets
+    if all([i.get("timestamp"), i.get("latitude"), i.get("longitude")])
+]
+
+# Check if we have all triplets in one list
+print(f"Total triplets fetched: {len(all_triplets)}")
+
 # 🕒 Convert timestamps & sort
-df = pd.DataFrame(triplets)
+df = pd.DataFrame(all_triplets)
+
+# Check the DataFrame structure to ensure everything is valid
+print(f"DataFrame structure: {df.head()}")
+
+# Handle any invalid or missing timestamps
 df["timestamp"] = pd.to_datetime(
     df["timestamp"], errors="coerce"
 )  # Ensure datetime format
+df = df.dropna(subset=["timestamp"])  # Drop rows with invalid timestamps
+
+# Sort by timestamp
 df = df.sort_values("timestamp")
 
 # 🎯 H3 Resolution for Clustering

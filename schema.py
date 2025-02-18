@@ -224,7 +224,7 @@ def resolve_all_triplets(_, info, database):
                     )  # Remove the closing parenthesis
 
                     # Split latitude and longitude
-                    lat, lng = lat_lng_str.split()
+                    lng, lat = lat_lng_str.split()
 
                     # Parse timestamp and coordinates
                     timestamp = timestamp_str.strip()
