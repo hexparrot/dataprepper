@@ -5,7 +5,7 @@ import re
 import subprocess
 import logging
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(
@@ -22,39 +22,42 @@ class DataIngest:
         "pokemongo": "userdata/transformed/pokemongo",
         "lyft": "userdata/transformed/lyft",
         "waze": "userdata/transformed/waze",
+        "netflix": "userdata/transformed/netflix",
+        "spotify": "userdata/transformed/spotify/Spotify Account Data",
     }
     OUTPUT_PATHS = {
         "pokemongo": "userdata/purposed/pokemongo",
         "lyft": "userdata/purposed/lyft",
         "waze": "userdata/purposed/waze",
+        "netflix": "userdata/purposed/netflix",
+        "spotify": "userdata/purposed/spotify",
     }
     PIPE_SCRIPT = "pipes/rewrite_pipe_of_sorts.py"
 
     TIMESTAMP_FIELDS = {
-        "Timestamp",
-        "timestamp",
         "Date and time of logging (UTC)",
-        "Date and Time",
-        "Date and time",
-        "Event Date",
-        "Entry Date",
+        "searchTime",
         "Last Login",
-        "Date",
-        "Login Time",
-        "Logout Time",
     }
-    TIMESTAMP_SUFFIXES = {"_at", "_timestamp", "_time", "friendship start"}
+    TIMESTAMP_SUFFIXES = {"ts", "timestamp", "date", "time", "_at"}
     TIMESTAMP_FORMATS = [
-        "%m/%d/%Y %H:%M:%S UTC",
+        "%m/%d/%Y %H:%M:%S UTC",  # Matches: 02/17/2025 22:30:48 UTC
+        "%Y-%m-%dT%H:%M:%S.%fZ",  # Matches 2024-11-06T05:03:24.791Z
+        "%Y-%m-%dT%H:%M:%S.%f",  # Matches 2021-02-04T22:01:38.738000
         "%Y-%m-%d %H:%M:%S.%f UTC",
         "%Y-%m-%d %H:%M:%S UTC",
-        "%Y-%m-%d %H:%M:%S GMT",
-        "%Y-%m-%dT%H:%M:%S.%fZ",
-        "%Y-%m-%dT%H:%M:%S.%f",
-        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S GMT",  # Matches: 2021-12-24 21:13:56 GMT
+        "%Y-%m-%dT%H:%M:%S.%f",  # Matches: 2021-06-03T00:05:00.198
+        "%Y-%m-%d %H:%M:%S.%f%z",  # Matches: 2011-02-07 10:16:18.000+0000
+        "%Y-%m-%dT%H:%M:%S.%fZ",  # Matches: 2018-09-02T02:15:36Z
+        "%Y-%m-%dT%H:%M:%S%z",  # Matches: 2011-09-29T07:30:11+0000
+        "%Y-%m-%dT%H:%M:%S",  # Matches: 2021-02-01T03:47:54
+        "%Y-%m-%d %H:%M",  # Matches: 2021-02-05 11:19
+        "%Y%m%d",
         "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
         "%Y-%m-%dT%H:%M:%S%z",
-        "%Y-%m-%d %H:%M:%S.%f",  # Added format for call_completed_at
+        "%Y-%m-%d %H:%M:%S.%f",
     ]
 
     LAT_LONG_FIELDS = {"latitude", "longitude", "lat", "lng"}
@@ -74,56 +77,150 @@ class DataIngest:
             "pokemongo": defaultdict(list),
             "lyft": defaultdict(list),
             "waze": defaultdict(list),
+            "spotify": defaultdict(list),
+            "netflix": defaultdict(list),
         }
 
     def convert_lat_long_fields(self, data):
-        """Convert all latitude/longitude fields to float values if they appear valid."""
+        """Identify latitude/longitude fields and convert them to valid floats while ensuring data integrity."""
+
+        if not data or not isinstance(data, list):
+            # logging.warning("Data is empty or not a list.")
+            return []
+
+        # Identify lat/long fields based on the first record
+        first_record = data[0]
+        lat_long_keys = {
+            key
+            for key in first_record.keys()
+            if key.lower() in self.LAT_LONG_FIELDS
+            or any(key.lower().endswith(suffix) for suffix in self.LAT_LONG_SUFFIXES)
+        }
+
+        if not lat_long_keys:
+            # logging.info("No latitude/longitude fields detected. Skipping conversion.")
+            return data  # No lat/long fields found, return data as is
+
+        logging.info(f"Identified latitude/longitude fields: {lat_long_keys}")
+
+        valid_data = []  # Store valid records
+        fields_changed = 0
+
         for record in data:
-            for key, value in record.items():
-                if (
-                    (
-                        key.lower() in self.LAT_LONG_FIELDS
-                        or any(
-                            key.lower().endswith(suffix)
-                            for suffix in self.LAT_LONG_SUFFIXES
-                        )
+            for key in lat_long_keys:
+                value = record.get(key)
+
+                if value == "":
+                    record[key] = None
+                    fields_changed += 1
+                    continue
+
+                # Try converting to float
+                try:
+                    record[key] = float(value)  # Replace value with valid float
+                except ValueError:
+                    logging.warning(
+                        f"Skipping record due to non-numeric value in field '{key}': {value}."
                     )
-                    and isinstance(value, str)
-                    and value.strip()
-                ):
-                    try:
-                        converted_value = float(value)
-                        if (
-                            -90 <= converted_value <= 90
-                            or -180 <= converted_value <= 180
-                        ):
-                            record[key] = converted_value
-                    except ValueError:
-                        pass  # Retain original value if conversion fails
-        return data
+                    break  # Prevent saving it
+
+            valid_data.append(record)
+
+        if len(valid_data) != len(data):
+            logging.info(f"total kept: {len(valid_data)} / total checked: {len(data)}")
+        else:
+            logging.info(
+                f"{fields_changed} values modified; total records {len(valid_data)}"
+            )
+        return valid_data
 
     def convert_iso_timestamps(self, data):
-        """Convert all timestamp-like fields to ISO 8601 format."""
+        """Convert all timestamp-like fields to ISO 8601 format, tracking the number of modifications."""
+
+        if not data or not isinstance(data, list):
+            # logging.warning("Data is empty or not a list.")
+            return []
+
+        # Identify timestamp fields based on the first record
+        first_record = data[0]
+        timestamp_keys = {
+            key
+            for key in first_record.keys()
+            if key in self.TIMESTAMP_FIELDS
+            or any(key.lower().endswith(suffix) for suffix in self.TIMESTAMP_SUFFIXES)
+        }
+
+        if not timestamp_keys:
+            # logging.info("No timestamp fields detected. Skipping conversion.")
+            return data  # No timestamp fields found, return data as is
+
+        logging.info(f"Identified timestamp fields: {timestamp_keys}")
+
+        valid_data = []  # Store valid records
+        modifications_count = {}  # Tracks how many values were changed per field
+
+        for key in timestamp_keys:
+            modifications_count[key] = 0  # Initialize each field count to 0
+
         for record in data:
-            for key, value in record.items():
-                if key in self.TIMESTAMP_FIELDS or any(
-                    key.lower().endswith(suffix) for suffix in self.TIMESTAMP_SUFFIXES
-                ):
-                    value = value.strip() if isinstance(value, str) else None
-                    if not value:
-                        record[key] = None
+            for key in timestamp_keys:
+                value = record.get(key)
+
+                # Convert empty string to None
+                if value == "":
+                    record[key] = None
+                    modifications_count[key] += 1
+                    # logging.info(f"Converted empty string to None in field '{key}'.")
+                    continue  # Move to the next field
+
+                # Ensure value is a valid string
+                if not isinstance(value, str):
+                    logging.warning(
+                        f"Skipping record due to non-string value in field '{key}': '{value}'"
+                    )
+                    continue  # Move to the next field
+
+                if "[UTC]" in value:
+                    # z means UTC so strip it out
+                    value = value.replace("[UTC]", "")
+
+                # Attempt conversion using multiple formats
+                parsed_timestamp = None
+                for fmt in self.TIMESTAMP_FORMATS:
+                    try:
+                        parsed_timestamp = datetime.strptime(
+                            value.strip(), fmt
+                        ).isoformat()
+                        break  # Stop trying formats once successful
+                    except ValueError:
                         continue
 
-                    for fmt in self.TIMESTAMP_FORMATS:
-                        try:
-                            record[key] = datetime.strptime(value, fmt).isoformat()
-                            break
-                        except ValueError:
-                            continue
+                if parsed_timestamp:
+                    record[
+                        key
+                    ] = parsed_timestamp  # Replace with ISO 8601 formatted timestamp
+                    # modifications_count[key] += 1  # proper parsing not considered as modifying
+                else:
+                    logging.warning(
+                        f"Could not parse timestamp format in field '{key}': {value}"
+                    )
+                    logging.warning(record)
+                    record[key] = None  # Assign None if parsing fails
+                    modifications_count[key] += 1
 
-                    if not isinstance(record[key], str):
-                        record[key] = None
-        return data
+            valid_data.append(record)
+
+        # Logging summary of modifications
+        total_modifications = sum(modifications_count.values())
+        if total_modifications > 0:
+            logging.info(
+                f"{total_modifications} total timestamp values interpreted as None across {len(valid_data)} records."
+            )
+            logging.info(f"Modification details: {modifications_count}")
+        else:
+            logging.info("No timestamp values were modified.")
+
+        return valid_data
 
     def transform(self, dataset, json_path):
         """Determine the correct transformation for a given file."""
@@ -294,12 +391,12 @@ class DataIngest:
 
             # Write JSON normally
             with open(output_filepath, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=4)
+                json.dump(data, f, indent=4, ensure_ascii=False)
             logging.info(f"Saved: {base_filename:<{dynamic_width}} → {output_filepath}")
 
     def run(self):
         """Run the full ingestion process for all datasets."""
-        for dataset in ["pokemongo", "lyft", "waze"]:
+        for dataset in ["pokemongo", "lyft", "waze", "spotify", "netflix"]:
             self.process_files(dataset)
             self.write_output(dataset)
 

@@ -37,12 +37,20 @@ type Query {
   allTriplets(database: String!): [Triplet]
   countTriplets(database: String!): Int
   availableDatabases: [String]
+  allMediaPlays(database: String!, limit: Int!): [MediaPlay]
+  countMediaPlays: Int
 }
 
 type Triplet {
   timestamp: String
   latitude: Float
   longitude: Float
+}
+
+type MediaPlay {
+  timestamp: String
+  media: String
+  duration: String
 }
 
 scalar JSON
@@ -342,6 +350,76 @@ def resolve_count_triplets(_, info, database):
                 )
 
     logging.info(f"Total triplet count from {database}: {total_count}")
+    return total_count
+
+
+@query.field("allMediaPlays")
+def resolve_get_streaming_history(_, info, database, limit=10):
+    """Fetches streaming history dynamically from all collections that start with 'StreamingHistory_music_'."""
+
+    db = client[database]  # Connect to the Spotify database
+    collections = [
+        col
+        for col in db.list_collection_names()
+        if col.startswith("StreamingHistory_music_")
+        or col.startswith("ViewingActivity")
+    ]
+
+    logging.info(f"Found {len(collections)} matching collections: {collections}")
+
+    history = []
+
+    for collection_name in collections:
+        collection = db[collection_name]  # Access the collection
+
+        logging.info(f"Fetching from {collection_name} (limit={limit})")
+
+        records = collection.find({}, {"_id": 0}).limit(
+            limit
+        )  # Get records from collection
+
+        # Convert records to list and ensure timestamp formatting
+        for record in records:
+            try:
+                new = {
+                    "timestamp": record["Start_Time"],
+                    "media": f"{record.get('Title')}",
+                    "duration": record.get("Duration"),
+                }
+            except AttributeError as e:
+                print(e)
+            else:
+                history.append(new)
+
+    # Sort the results by timestamp before returning
+    history = sorted(history, key=lambda x: x["timestamp"])
+
+    logging.info(f"Returned {len(history)} streaming history records.")
+    return history
+
+
+@query.field("countMediaPlays")
+def resolve_count_media_plays(_, info, database):
+    """Counts the total number of play records from all 'StreamingHistory_music_*' collections in Spotify."""
+
+    db = client[database]  # Connect to the database
+    collections = [
+        col
+        for col in db.list_collection_names()
+        if col.startswith("StreamingHistory_music_")
+    ]
+
+    logging.info(f"Found {len(collections)} matching collections: {collections}")
+
+    total_count = 0
+
+    for collection_name in collections:
+        collection = db[collection_name]  # Access the collection
+        count = collection.count_documents({})  # Count all documents
+        logging.info(f"Collection '{collection_name}' has {count} plays.")
+        total_count += count  # Add to total count
+
+    logging.info(f"Total play count for Spotify: {total_count}")
     return total_count
 
 

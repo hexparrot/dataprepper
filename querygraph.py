@@ -97,11 +97,58 @@ def count_triplets() -> list:
     return run_graphql_query(query)
 
 
+def fetch_mediaplays() -> list:
+    """
+    Fetch mediaplays from spotify
+
+    Returns:
+        A list of mediaplays, timestamped
+    """
+    query = """
+    query {
+      spotifyPlays: allMediaPlays(database: "spotify", limit: 100) {
+        timestamp
+        media
+        duration
+      }
+    }
+    """
+    query = """
+    query {
+      netflixPlays: allMediaPlays(database: "netflix", limit: 100) {
+        timestamp
+        media
+        duration
+      }
+    }
+    """
+    return run_graphql_query(query)
+
+
+def count_mediaplays() -> list:
+    """
+    Count mediaplays among streaming services
+
+    Returns:
+        A count of mediaplay records
+    """
+    query = """
+    query {
+      spotifyMediaPlays: countMediaPlays
+    }
+    """
+    return run_graphql_query(query)
+
+
 if __name__ == "__main__":
     # Example usage: fetch triplets and print the total count and JSON output.
-    retval = fetch_triplets()
+    # retval = fetch_triplets()
     # print(f"Total triplets fetched: {len(triplets)}")
 
     # not fully functional; not counting triplets but the unprocessed document count
     # retval = count_triplets()
+
+    retval = fetch_mediaplays()
+    # retval = count_mediaplays()
+
     print(retval)

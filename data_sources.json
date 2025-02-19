@@ -18,6 +18,14 @@
     "waze": {
         "location_details": { "timestamp": "timestamp", "latitude": "latitude", "longitude": "longitude"
         }
+    },
+    "spotify": {
+        "StreamingHistory_music_": { "timestamp": "timestamp", "media": "media", "duration": "duration"
+        }
+    },
+    "netflix": {
+        "ViewingActivity": { "timestamp": "Start_Time", "media": "Title", "duration": "Duration"
+        }
     }
 }
 
