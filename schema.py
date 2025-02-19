@@ -39,6 +39,7 @@ type Query {
   availableDatabases: [String]
   allMediaPlays(database: String!, limit: Int!): [MediaPlay]
   countMediaPlays: Int
+  allViewingActivities: [ViewingActivity]
 }
 
 type Triplet {
@@ -53,6 +54,20 @@ type MediaPlay {
   duration: String
 }
 
+type ViewingActivity {
+  _id: ID
+  Profile_Name: String
+  Start_Time: String
+  Duration: String
+  Attributes: String
+  Title: String
+  Supplemental_Video_Type: String
+  Device_Type: String
+  Bookmark: String
+  Latest_Bookmark: String
+  Country: String
+}
+
 scalar JSON
 """
 )
@@ -63,6 +78,33 @@ print("GraphQL schema defined.")
 @query.field("availableDatabases")
 def resolve_available_databases(_, info):
     return list(data_sources.keys())
+
+
+@query.field("allViewingActivities")
+def resolve_all_viewing_activities(_, info, database="netflix"):
+    """
+    Returns all Netflix viewing activity documents
+    from the 'ViewingActivity' collection in the specified database.
+    """
+    # 1) Ensure the database exists in your data_sources config
+    if database not in data_sources:
+        raise ValueError(f"Database '{database}' not found in configuration.")
+
+    # 2) Connect to the Mongo database
+    db = client[database]
+    merged_data = []
+
+    # 3) Use the 'ViewingActivity' collection
+    logging.info(f"Fetching ViewingActivity from {database}.ViewingActivity")
+    records = db["ViewingActivity"].find()
+
+    # 4) Convert each record's '_id' to string (so GraphQL doesn't choke on ObjectId)
+    for doc in records:
+        doc["_id"] = str(doc["_id"])
+        merged_data.append(doc)
+
+    # 5) Return the list
+    return merged_data
 
 
 @query.field("allTriplets")

@@ -1,10 +1,34 @@
 #!/usr/bin/env python3
 import requests
+import ijson
 import json
+import io
 from datetime import datetime
 
 # GraphQL Server URL
 GRAPHQL_ENDPOINT = "http://localhost:8000/graphql"
+
+
+def run_graphql_query_stream(query: str, path: str):
+    """
+    Execute a GraphQL query in streaming mode using requests + ijson.
+    Return a list of records found at the given 'path' in the JSON, e.g. 'data.netflixPlays.item'.
+    """
+    headers = {"Content-Type": "application/json"}
+    # Use stream=True to allow streaming
+    response = requests.post(
+        GRAPHQL_ENDPOINT, json={"query": query}, headers=headers, stream=True
+    )
+    if response.status_code != 200:
+        raise Exception(
+            f"GraphQL query failed with status {response.status_code}: {response.text}"
+        )
+
+    records = []
+    # Use ijson to stream-parse JSON from response.raw
+    for item in ijson.items(response.raw, path):
+        records.append(item)
+    return records
 
 
 def run_graphql_query(query: str) -> dict:
@@ -22,14 +46,7 @@ def run_graphql_query(query: str) -> dict:
     return response.json()
 
 
-def run_and_sort_query(query: str) -> list:
-    """
-    Run the provided GraphQL query and return a combined list of results
-    sorted by the 'timestamp' field.
-
-    This function searches the returned data for any keys mapping to lists,
-    merges them, filters out records missing 'timestamp', and then sorts the list.
-    """
+def run_and_sort_query(query: str) -> str:
     data = run_graphql_query(query)
     results = []
     for key, value in data.get("data", {}).items():
@@ -41,7 +58,7 @@ def run_and_sort_query(query: str) -> list:
     results = [
         item for item in results if item.get("latitude") and item.get("longitude")
     ]
-    # Sort by timestamp, converting to datetime when possible.
+    # Sort by timestamp.
     try:
         sorted_results = sorted(
             results, key=lambda x: datetime.fromisoformat(x["timestamp"])
@@ -51,13 +68,7 @@ def run_and_sort_query(query: str) -> list:
     return json.dumps(sorted_results, indent=2)
 
 
-def fetch_triplets() -> list:
-    """
-    Fetch triplets for pokemongo, waze, and lyft using a GraphQL query.
-
-    Returns:
-        A list of triplet records sorted by timestamp.
-    """
+def fetch_triplets() -> str:
     query = """
     query {
       pokemongoTriplets: allTriplets(database: "pokemongo") {
@@ -80,13 +91,7 @@ def fetch_triplets() -> list:
     return run_and_sort_query(query)
 
 
-def count_triplets() -> list:
-    """
-    Count triplets for pokemongo, waze, and lyft using a GraphQL query.
-
-    Returns:
-        A count of triplet records
-    """
+def count_triplets() -> dict:
     query = """
     query {
       pokemongoTriplets: countTriplets(database: "pokemongo")
@@ -97,58 +102,39 @@ def count_triplets() -> list:
     return run_graphql_query(query)
 
 
-def fetch_mediaplays() -> list:
+def fetch_mediaplays_streaming() -> list:
     """
-    Fetch mediaplays from spotify
-
-    Returns:
-        A list of mediaplays, timestamped
+    Fetch netflixPlays from the server in streaming mode using ijson.
+    Returns a Python list of items found at data.netflixPlays
     """
     query = """
-    query {
-      spotifyPlays: allMediaPlays(database: "spotify", limit: 100) {
-        timestamp
-        media
-        duration
-      }
-    }
+        query {
+          allViewingActivities {
+            _id
+            Profile_Name
+            Start_Time
+            Duration
+            Title
+            Bookmark
+          }
+        }
+    """
+    # ijson path to the array is 'data.netflixPlays.item'
+    results = run_graphql_query_stream(query, "data.allViewingActivities.item")
+    return results
+
+
+def fetch_mediaplays() -> dict:
+    """
+    Fetch mediaplays from netflix (non-streaming version) if you prefer.
+    Returns the entire JSON dictionary.
     """
     query = """
-    query {
-      netflixPlays: allMediaPlays(database: "netflix", limit: 100) {
-        timestamp
-        media
-        duration
-      }
-    }
-    """
-    return run_graphql_query(query)
-
-
-def count_mediaplays() -> list:
-    """
-    Count mediaplays among streaming services
-
-    Returns:
-        A count of mediaplay records
-    """
-    query = """
-    query {
-      spotifyMediaPlays: countMediaPlays
-    }
     """
     return run_graphql_query(query)
 
 
 if __name__ == "__main__":
-    # Example usage: fetch triplets and print the total count and JSON output.
-    # retval = fetch_triplets()
-    # print(f"Total triplets fetched: {len(triplets)}")
-
-    # not fully functional; not counting triplets but the unprocessed document count
-    # retval = count_triplets()
-
-    retval = fetch_mediaplays()
-    # retval = count_mediaplays()
-
-    print(retval)
+    # Example: streaming fetch for Netflix plays
+    records = fetch_mediaplays_streaming()
+    print(json.dumps(records, indent=2))
