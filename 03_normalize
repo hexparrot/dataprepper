@@ -47,24 +47,23 @@ class DataIngest:
     }
     TIMESTAMP_SUFFIXES = {"ts", "timestamp", "date", "time", "_at"}
     TIMESTAMP_FORMATS = [
-        "%m/%d/%Y %H:%M:%S UTC",  # Matches: 02/17/2025 22:30:48 UTC
-        "%Y-%m-%dT%H:%M:%S.%fZ",  # Matches 2024-11-06T05:03:24.791Z
-        "%Y-%m-%dT%H:%M:%S.%f",  # Matches 2021-02-04T22:01:38.738000
-        "%Y-%m-%dT%H:%M:%SZ",  # Matches 2021-11-15T15:21:48Z
-        "%Y-%m-%d %H:%M:%S.%f UTC",
-        "%Y-%m-%d %H:%M:%S UTC",
-        "%Y-%m-%d %H:%M:%S GMT",  # Matches: 2021-12-24 21:13:56 GMT
-        "%Y-%m-%dT%H:%M:%S.%f",  # Matches: 2021-06-03T00:05:00.198
-        "%Y-%m-%d %H:%M:%S.%f%z",  # Matches: 2011-02-07 10:16:18.000+0000
-        "%Y-%m-%dT%H:%M:%S.%fZ",  # Matches: 2018-09-02T02:15:36Z
-        "%Y-%m-%dT%H:%M:%S%z",  # Matches: 2011-09-29T07:30:11+0000
-        "%Y-%m-%dT%H:%M:%S",  # Matches: 2021-02-01T03:47:54
-        "%Y-%m-%d %H:%M",  # Matches: 2021-02-05 11:19
-        "%Y%m%d",
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d",
-        "%Y-%m-%dT%H:%M:%S%z",
-        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S.%f UTC",  # Example: 2021-12-24 21:13:56.123456 UTC
+        "%Y-%m-%d %H:%M:%S UTC",  # Example: 2021-12-24 21:13:56 UTC
+        "%m/%d/%Y %H:%M:%S UTC",  # Example: 02/17/2025 22:30:48 UTC
+        "%Y-%m-%d %H:%M:%S GMT",  # Example: 2021-12-24 21:13:56 GMT
+        "%Y-%m-%dT%H:%M:%S.%fZ",  # Example: 2024-11-06T05:03:24.791Z
+        "%Y-%m-%dT%H:%M:%SZ",  # Example: 2021-11-15T15:21:48Z
+        "%Y-%m-%dT%H:%M:%S.%f",  # Example: 2021-06-03T00:05:00.198
+        "%Y-%m-%d %H:%M:%S.%f%z",  # Example: 2011-02-07 10:16:18.000+0000
+        "%Y-%m-%dT%H:%M:%S.%f%z",  # Example: 2021-10-06T19:12:03.000-07:00
+        "%Y-%m-%dT%H:%M:%S%z",  # Example: 2011-09-29T07:30:11+0000
+        "%Y-%m-%dT%H:%M:%S",  # Example: 2021-02-01T03:47:54
+        "%Y:%m:%d %H:%M:%S",  # Example: 2015:04:22 18:46:59 (EXIF format)
+        "%Y-%m-%d %H:%M",  # Example: 2021-02-05 11:19
+        "%Y%m%d",  # Example: 20210310
+        "%Y-%m-%d %H:%M:%S",  # Example: 2021-02-01 12:30:45
+        "%Y-%m-%d",  # Example: 2021-02-01
+        "%Y-%m-%d %H:%M:%S.%f",  # Example: 2021-02-01 12:30:45.123456
     ]
 
     LAT_LONG_FIELDS = {"latitude", "longitude", "lat", "lng"}
@@ -144,93 +143,57 @@ class DataIngest:
             )
         return valid_data
 
-    def convert_iso_timestamps(self, data):
-        """Convert all timestamp-like fields to ISO 8601 format, tracking the number of modifications."""
+    def convert_iso_timestamps(self, doc: dict) -> dict:
+        """
+        Recursively traverse 'data' (which can be a dict, list, or otherwise),
+        and for any key that appears to be a timestamp field, convert it to ISO8601.
+        If the field cannot be parsed with the known formats, set it to None.
+        """
 
-        if not data or not isinstance(data, list):
-            # logging.warning("Data is empty or not a list.")
-            return []
+        def parse_timestamp(value_str):
+            """Try to parse a string using the known TIMESTAMP_FORMATS, returning ISO8601 or None."""
+            if not isinstance(value_str, str) or not value_str.strip():
+                return None  # Not a valid non-empty string
 
-        # Identify timestamp fields based on the first record
-        first_record = data[0]
-        timestamp_keys = {
-            key
-            for key in first_record.keys()
-            if key in self.TIMESTAMP_FIELDS
-            or any(key.lower().endswith(suffix) for suffix in self.TIMESTAMP_SUFFIXES)
-        }
+            # Remove "[UTC]" if present and strip whitespace
+            cleaned_str = value_str.replace("[UTC]", "").strip()
 
-        if not timestamp_keys:
-            # logging.info("No timestamp fields detected. Skipping conversion.")
-            return data  # No timestamp fields found, return data as is
+            # Attempt parsing with each format
+            for fmt in self.TIMESTAMP_FORMATS:
+                try:
+                    return datetime.strptime(cleaned_str, fmt).isoformat()
+                except ValueError:
+                    pass
 
-        logging.info(f"Identified timestamp fields: {timestamp_keys}")
+            logging.warning(f"Could not parse timestamp: '{value_str}'")
+            return None
 
-        valid_data = []  # Store valid records
-        modifications_count = {}  # Tracks how many values were changed per field
+        def recurse(obj):
+            """Walk through dicts/lists at all nesting levels, converting any recognized timestamp fields."""
+            if isinstance(obj, dict):
+                new_dict = {}
+                for k, v in obj.items():
+                    # Check if this key is recognized as a timestamp-like field
+                    if k in self.TIMESTAMP_FIELDS or any(
+                        k.lower().endswith(suffix) for suffix in self.TIMESTAMP_SUFFIXES
+                    ):
+                        new_dict[k] = parse_timestamp(v)
+                    else:
+                        # Keep recursing deeper for non-timestamp fields
+                        new_dict[k] = recurse(v)
+                return new_dict
 
-        for key in timestamp_keys:
-            modifications_count[key] = 0  # Initialize each field count to 0
+            elif isinstance(obj, list):
+                # Recurse into each item in the list
+                return [recurse(item) for item in obj]
 
-        for record in data:
-            for key in timestamp_keys:
-                value = record.get(key)
+            else:
+                # If it's a scalar (str, int, float, etc.) that's not recognized
+                # as a timestamp field, return as is
+                return obj
 
-                # Convert empty string to None
-                if value == "":
-                    record[key] = None
-                    modifications_count[key] += 1
-                    # logging.info(f"Converted empty string to None in field '{key}'.")
-                    continue  # Move to the next field
-
-                # Ensure value is a valid string
-                if not isinstance(value, str):
-                    logging.warning(
-                        f"Skipping record due to non-string value in field '{key}': '{value}'"
-                    )
-                    continue  # Move to the next field
-
-                if "[UTC]" in value:
-                    # z means UTC so strip it out
-                    value = value.replace("[UTC]", "")
-
-                # Attempt conversion using multiple formats
-                parsed_timestamp = None
-                for fmt in self.TIMESTAMP_FORMATS:
-                    try:
-                        parsed_timestamp = datetime.strptime(
-                            value.strip(), fmt
-                        ).isoformat()
-                        break  # Stop trying formats once successful
-                    except ValueError:
-                        continue
-
-                if parsed_timestamp:
-                    record[
-                        key
-                    ] = parsed_timestamp  # Replace with ISO 8601 formatted timestamp
-                    # modifications_count[key] += 1  # proper parsing not considered as modifying
-                else:
-                    logging.warning(
-                        f"Could not parse timestamp format in field '{key}': {value}"
-                    )
-                    logging.warning(record)
-                    record[key] = None  # Assign None if parsing fails
-                    modifications_count[key] += 1
-
-            valid_data.append(record)
-
-        # Logging summary of modifications
-        total_modifications = sum(modifications_count.values())
-        if total_modifications > 0:
-            logging.info(
-                f"{total_modifications} total timestamp values interpreted as None across {len(valid_data)} records."
-            )
-            logging.info(f"Modification details: {modifications_count}")
-        else:
-            logging.info("No timestamp values were modified.")
-
-        return valid_data
+        # Begin recursion from the top-level doc
+        return recurse(doc)
 
     def transform(self, dataset, json_path):
         """Determine the correct transformation for a given file."""
