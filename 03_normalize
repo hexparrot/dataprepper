@@ -24,6 +24,9 @@ class DataIngest:
         "waze": "userdata/transformed/waze",
         "netflix": "userdata/transformed/netflix",
         "spotify": "userdata/transformed/spotify/Spotify Account Data",
+        "images": "userdata/transformed/images",
+        "chat": "userdata/transformed/chat",
+        "github": "userdata/transformed/github",
     }
     OUTPUT_PATHS = {
         "pokemongo": "userdata/purposed/pokemongo",
@@ -31,6 +34,9 @@ class DataIngest:
         "waze": "userdata/purposed/waze",
         "netflix": "userdata/purposed/netflix",
         "spotify": "userdata/purposed/spotify",
+        "images": "userdata/purposed/images",
+        "chat": "userdata/purposed/chat",
+        "github": "userdata/purposed/github",
     }
     PIPE_SCRIPT = "pipes/rewrite_pipe_of_sorts.py"
 
@@ -44,6 +50,7 @@ class DataIngest:
         "%m/%d/%Y %H:%M:%S UTC",  # Matches: 02/17/2025 22:30:48 UTC
         "%Y-%m-%dT%H:%M:%S.%fZ",  # Matches 2024-11-06T05:03:24.791Z
         "%Y-%m-%dT%H:%M:%S.%f",  # Matches 2021-02-04T22:01:38.738000
+        "%Y-%m-%dT%H:%M:%SZ",  # Matches 2021-11-15T15:21:48Z
         "%Y-%m-%d %H:%M:%S.%f UTC",
         "%Y-%m-%d %H:%M:%S UTC",
         "%Y-%m-%d %H:%M:%S GMT",  # Matches: 2021-12-24 21:13:56 GMT
@@ -79,6 +86,9 @@ class DataIngest:
             "waze": defaultdict(list),
             "spotify": defaultdict(list),
             "netflix": defaultdict(list),
+            "images": defaultdict(list),
+            "chat": defaultdict(list),
+            "github": defaultdict(list),
         }
 
     def convert_lat_long_fields(self, data):
@@ -396,7 +406,16 @@ class DataIngest:
 
     def run(self):
         """Run the full ingestion process for all datasets."""
-        for dataset in ["pokemongo", "lyft", "waze", "spotify", "netflix"]:
+        for dataset in [
+            "pokemongo",
+            "lyft",
+            "waze",
+            "spotify",
+            "netflix",
+            "images",
+            "chat",
+            "github",
+        ]:
             self.process_files(dataset)
             self.write_output(dataset)
 

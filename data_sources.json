@@ -26,6 +26,18 @@
     "netflix": {
         "ViewingActivity": { "timestamp": "Start_Time", "media": "Title", "duration": "Duration"
         }
+    },
+    "images": {
+        "ViewingActivity": { "timestamp": "Start_Time", "media": "Title", "duration": "Duration"
+        }
+    },
+    "chat": {
+        "ViewingActivity": { "timestamp": "Start_Time", "media": "Title", "duration": "Duration"
+        }
+    },
+    "github": {
+        "ViewingActivity": { "timestamp": "Start_Time", "media": "Title", "duration": "Duration"
+        }
     }
 }
 

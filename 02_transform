@@ -184,6 +184,7 @@ PARSERS = {
     "images": parse_exif,
     "apple": parse_csv_json,
     "fitbit": parse_csv_json,
+    "github": parse_json,
     "lyft": parse_csv,
     "netflix": parse_csv,
     "pokemongo": parse_csv,
