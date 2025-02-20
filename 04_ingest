@@ -12,8 +12,8 @@ from dateutil.parser import parse as parse_datetime
 04_ingest.py
 
 A script for ingesting JSON files into MongoDB. 
-Ensures all datetime fields are converted properly before insertion, 
-handles duplicates, and sanitizes field names.
+Ensures all datetime fields are converted properly before insertion (including nested fields), 
+handles duplicates, and sanitizes field names (recursively).
 
 Requirements:
  - Python 3
@@ -59,42 +59,51 @@ def sanitize_field_name(field_name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_]", "_", field_name)
 
 
-def is_potential_datetime(value: str) -> bool:
+def looks_like_datetime(value: str) -> bool:
     """
-    A quick heuristic to decide whether a string might be a datetime.
-    Adjust the logic/patterns to fit your data.
+    Decide whether a string might be a datetime based on length and basic pattern.
+    Adjust logic as needed.
     """
-    import re
-
-    # Optional first check: must be at least 10 chars ("YYYY-MM-DD" is 10).
+    if not isinstance(value, str):
+        return False
+    # Simple example check: at least 'YYYY-MM-DD' => 10 chars.
     if len(value) < 10:
         return False
+    # Basic pattern: starts with YYYY-MM-DD
+    return bool(re.match(r"^\d{4}-\d{2}-\d{2}", value.strip()))
 
-    # This regex checks for a pattern like YYYY-MM-DD, possibly with time.
-    # Feel free to make this more/less strict as needed.
-    date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
-    if date_pattern.match(value):
-        return True
+def sanitize_and_parse(obj):
+    """
+    Recursively traverse `obj`.
+    1) Sanitize all dict keys.
+    2) Convert any string that looks like a datetime to a Python datetime object.
+    Returns a new object with the same structure.
+    """
+    if isinstance(obj, dict):
+        new_dict = {}
+        for raw_key, val in obj.items():
+            # Sanitize the key
+            clean_key = sanitize_field_name(raw_key)
+
+            # Recursively process the value
+            new_dict[clean_key] = sanitize_and_parse(val)
+        return new_dict
+
+    elif isinstance(obj, list):
+        # Process each item in the list
+        return [sanitize_and_parse(item) for item in obj]
+
     else:
-        return False
-
-
-def convert_iso_timestamps(doc: dict) -> dict:
-    """
-    Attempt to parse only those string values that match our 'potential datetime' check.
-    If parse is successful, store it as a datetime; otherwise, leave it as-is.
-    """
-    from dateutil.parser import parse as parse_datetime
-
-    for key, val in list(doc.items()):
-        if isinstance(val, str) and is_potential_datetime(val):
+        # If it's neither list nor dict, check if it "looks" like a datetime
+        if isinstance(obj, str) and looks_like_datetime(obj):
             try:
-                doc[key] = parse_datetime(val)
+                return parse_datetime(obj)
             except (ValueError, TypeError):
-                # If it fails to parse, just leave the value as a string
-                logging.debug(f"Skipping invalid datetime: '{val}' for field '{key}'")
-    return doc
+                # If parse fails, leave it as-is
+                logging.debug(f"Skipping invalid datetime: '{obj}'")
+        # Return original obj if not a candidate for datetime
+        return obj
 
 
 def check_document_exists(collection, doc: dict) -> bool:
@@ -144,28 +153,19 @@ def ingest_data():
 
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
+                        raw_data = json.load(f)
 
                         # If the file is empty, skip it
-                        if not data:
+                        if not raw_data:
                             logging.info(f"Skipping empty .json file: {filename}")
                             continue
 
-                        # Enforce sanitization and timestamp conversion
-                        if isinstance(data, list):
-                            data = [
-                                convert_iso_timestamps(
-                                    {sanitize_field_name(k): v for k, v in doc.items()}
-                                )
-                                for doc in data
-                            ]
+                        # Recursively sanitize and parse datetimes
+                        if isinstance(raw_data, list):
+                            data = [sanitize_and_parse(item) for item in raw_data]
                         else:
                             # If the data is a single dict, convert it to a list of one
-                            single_doc = {
-                                sanitize_field_name(k): v for k, v in data.items()
-                            }
-                            single_doc = convert_iso_timestamps(single_doc)
-                            data = [single_doc]
+                            data = [sanitize_and_parse(raw_data)]
 
                         # Insert documents, avoiding duplicates
                         if collection.estimated_document_count() == 0:
