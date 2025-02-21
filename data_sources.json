@@ -38,6 +38,10 @@
     "github": {
         "ViewingActivity": { "timestamp": "Start_Time", "media": "Title", "duration": "Duration"
         }
+    },
+    "geojson": {
+        "ViewingActivity": { "timestamp": "timestamp", "latitude": "latitude", "longitude": "longitude"
+        }
     }
 }
 

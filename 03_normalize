@@ -27,6 +27,7 @@ class DataIngest:
         "images": "userdata/transformed/images",
         "chat": "userdata/transformed/chat",
         "github": "userdata/transformed/github",
+        "geojson": "userdata/transformed/geojson",
     }
     OUTPUT_PATHS = {
         "pokemongo": "userdata/purposed/pokemongo",
@@ -37,6 +38,7 @@ class DataIngest:
         "images": "userdata/purposed/images",
         "chat": "userdata/purposed/chat",
         "github": "userdata/purposed/github",
+        "geojson": "userdata/purposed/geojson",
     }
     PIPE_SCRIPT = "pipes/rewrite_pipe_of_sorts.py"
 
@@ -88,6 +90,7 @@ class DataIngest:
             "images": defaultdict(list),
             "chat": defaultdict(list),
             "github": defaultdict(list),
+            "geojson": [],
         }
 
     def convert_lat_long_fields(self, data):
@@ -199,33 +202,65 @@ class DataIngest:
         """Determine the correct transformation for a given file."""
         filename = os.path.basename(json_path)
 
-        # 1. Remove the '.json' extension BEFORE storing in dictionary
-        if filename.endswith(".json"):
-            base_filename = filename[:-5]  # Strip exactly ".json"
+        if dataset == "geojson":
+            base_filename = "geojson"
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    geojson_data = json.load(f)
+            except json.JSONDecodeError:
+                logging.warning(f"Skipping {filename}: Invalid JSON format")
+                return
+
+            if (
+                geojson_data.get("type") != "FeatureCollection"
+                or "features" not in geojson_data
+            ):
+                logging.warning(f"Skipping {filename}: Not a valid FeatureCollection")
+                return
+
+            # Flatten GeoJSON: Extract each feature's properties & geometry
+            for feature in geojson_data["features"]:
+                if "properties" in feature and "geometry" in feature:
+                    ts = feature["properties"].pop("time")
+                    flattened_record = {
+                        **feature["properties"],
+                        "timestamp": ts,
+                        "latitude": feature["geometry"]["coordinates"][1],
+                        "longitude": feature["geometry"]["coordinates"][0],
+                    }
+                    self.aggregated_data[dataset].append(flattened_record)
+
+            logging.info(
+                f"Flattened {filename} into {len(geojson_data['features'])} records"
+            )
         else:
-            base_filename = filename
+            # 1. Remove the '.json' extension BEFORE storing in dictionary
+            if filename.endswith(".json"):
+                base_filename = filename[:-5]  # Strip exactly ".json"
+            else:
+                base_filename = filename
 
-        # 2. Remove numbers at the end, whether they have an underscore or not
-        base_filename = re.sub(
-            r"(_?\d+)$", "", base_filename
-        )  # Removes _00001, _42, 123, etc.
+            # 2. Remove numbers at the end, whether they have an underscore or not
+            base_filename = re.sub(
+                r"(_?\d+)$", "", base_filename
+            )  # Removes _00001, _42, 123, etc.
 
-        # 3. Remove trailing underscores (if any remain after number removal)
-        base_filename = base_filename.rstrip("_")
+            # 3. Remove trailing underscores (if any remain after number removal)
+            base_filename = base_filename.rstrip("_")
 
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except json.JSONDecodeError:
-            logging.warning(f"Skipping {filename}: Invalid JSON format")
-            return
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except json.JSONDecodeError:
+                logging.warning(f"Skipping {filename}: Invalid JSON format")
+                return
 
-        data = self.convert_lat_long_fields(data)
-        data = self.convert_iso_timestamps(data)
+            data = self.convert_lat_long_fields(data)
+            data = self.convert_iso_timestamps(data)
 
-        # **Store in dictionary WITHOUT .json, without numbers, and fully cleaned**
-        cleaned_key = base_filename.rstrip("_")
-        self.aggregated_data[dataset][cleaned_key].extend(data)
+            # **Store in dictionary WITHOUT .json, without numbers, and fully cleaned**
+            cleaned_key = base_filename.rstrip("_")
+            self.aggregated_data[dataset][cleaned_key].extend(data)
 
     def process_files(self, dataset):
         """Process all JSON files in the source directory."""
@@ -359,22 +394,28 @@ class DataIngest:
         """Write all aggregated output files to the destination directory."""
         output_path = self.OUTPUT_PATHS[dataset]
 
-        for base_filename, data in self.aggregated_data[dataset].items():
-            # Ensure the filename ends with .json and strip any remaining underscores
-            output_filename = f"{base_filename.rstrip('_')}.json"
+        if dataset == "geojson":
+            output_filename = f"geojson.json"
             output_filepath = os.path.join(output_path, output_filename)
 
-            # Remove any previously misnamed versions of the file
-            for old_file in os.listdir(output_path):
-                if old_file.startswith(base_filename) and old_file != output_filename:
-                    os.remove(os.path.join(output_path, old_file))
-                    logging.info(f"Removed outdated file: {old_file}")
-
+            data = self.aggregated_data[dataset]
+            print(data)
             # Write the cleaned and aggregated JSON data
             with open(output_filepath, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
 
             logging.info(f"Saved: {output_filename} → {output_filepath}")
+        else:
+            for base_filename, data in self.aggregated_data[dataset].items():
+                # Ensure the filename ends with .json and strip any remaining underscores
+                output_filename = f"{base_filename.rstrip('_')}.json"
+                output_filepath = os.path.join(output_path, output_filename)
+
+                # Write the cleaned and aggregated JSON data
+                with open(output_filepath, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=4, ensure_ascii=False)
+
+                logging.info(f"Saved: {output_filename} → {output_filepath}")
 
     def run(self):
         """Run the full ingestion process for all datasets."""
@@ -387,6 +428,7 @@ class DataIngest:
             # "images",
             # "chat",
             "github",
+            "geojson",
         ]:
             self.process_files(dataset)
             self.write_output(dataset)
