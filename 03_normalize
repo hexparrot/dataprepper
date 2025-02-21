@@ -198,7 +198,20 @@ class DataIngest:
     def transform(self, dataset, json_path):
         """Determine the correct transformation for a given file."""
         filename = os.path.basename(json_path)
-        base_filename = re.sub(r"\d+", "", filename).strip()
+
+        # 1. Remove the '.json' extension BEFORE storing in dictionary
+        if filename.endswith(".json"):
+            base_filename = filename[:-5]  # Strip exactly ".json"
+        else:
+            base_filename = filename
+
+        # 2. Remove numbers at the end, whether they have an underscore or not
+        base_filename = re.sub(
+            r"(_?\d+)$", "", base_filename
+        )  # Removes _00001, _42, 123, etc.
+
+        # 3. Remove trailing underscores (if any remain after number removal)
+        base_filename = base_filename.rstrip("_")
 
         try:
             with open(json_path, "r", encoding="utf-8") as f:
@@ -209,7 +222,10 @@ class DataIngest:
 
         data = self.convert_lat_long_fields(data)
         data = self.convert_iso_timestamps(data)
-        self.aggregated_data[dataset][base_filename].extend(data)
+
+        # **Store in dictionary WITHOUT .json, without numbers, and fully cleaned**
+        cleaned_key = base_filename.rstrip("_")
+        self.aggregated_data[dataset][cleaned_key].extend(data)
 
     def process_files(self, dataset):
         """Process all JSON files in the source directory."""
@@ -343,29 +359,22 @@ class DataIngest:
         """Write all aggregated output files to the destination directory."""
         output_path = self.OUTPUT_PATHS[dataset]
 
-        # Gather all base filenames for this dataset from aggregated data
-        base_filenames = list(self.aggregated_data[dataset].keys())
-
-        # Local function to compute dynamic width based on average length of filenames,
-        # disregarding the 2 longest files.
-        def compute_dynamic_width(filenames):
-            if not filenames:
-                return 50  # default width if no files are found
-            if len(filenames) <= 2:
-                return max(len(name) for name in filenames)
-            lengths = sorted(len(name) for name in filenames)
-            trimmed = lengths[-2]  # base on 2 longest filename
-            return trimmed
-
-        dynamic_width = compute_dynamic_width(base_filenames)
-
         for base_filename, data in self.aggregated_data[dataset].items():
-            output_filepath = os.path.join(output_path, base_filename)
+            # Ensure the filename ends with .json and strip any remaining underscores
+            output_filename = f"{base_filename.rstrip('_')}.json"
+            output_filepath = os.path.join(output_path, output_filename)
 
-            # Write JSON normally
+            # Remove any previously misnamed versions of the file
+            for old_file in os.listdir(output_path):
+                if old_file.startswith(base_filename) and old_file != output_filename:
+                    os.remove(os.path.join(output_path, old_file))
+                    logging.info(f"Removed outdated file: {old_file}")
+
+            # Write the cleaned and aggregated JSON data
             with open(output_filepath, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
-            logging.info(f"Saved: {base_filename:<{dynamic_width}} → {output_filepath}")
+
+            logging.info(f"Saved: {output_filename} → {output_filepath}")
 
     def run(self):
         """Run the full ingestion process for all datasets."""
@@ -375,8 +384,8 @@ class DataIngest:
             "waze",
             "spotify",
             "netflix",
-            "images",
-            "chat",
+            # "images",
+            # "chat",
             "github",
         ]:
             self.process_files(dataset)
