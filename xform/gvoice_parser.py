@@ -41,7 +41,7 @@ class GvoiceParser(BaseParser):
                 # Extract timestamp from <abbr class="dt" title="ISO8601 Timestamp">
                 timestamp_abbr = div.find("abbr", class_="dt")
                 if not timestamp_abbr or not timestamp_abbr.get("title"):
-                    logging.warning(
+                    logging.debug(
                         "(GvoiceParser) Skipping message with missing timestamp."
                     )
                     continue  # Skip if no timestamp is found
@@ -50,7 +50,7 @@ class GvoiceParser(BaseParser):
                 # Extract author phone number from <a class="tel" href="tel:+1234567890">
                 sender_cite = div.find("cite", class_="sender")
                 if not sender_cite:
-                    logging.warning("Skipping message with missing sender.")
+                    logging.debug("Skipping message with missing sender.")
                     continue
 
                 phone_tag = sender_cite.find("a", class_="tel")
@@ -64,7 +64,7 @@ class GvoiceParser(BaseParser):
                 # Extract message from <q> (quoted text)
                 message_q = div.find("q")
                 if not message_q:
-                    logging.warning("Skipping message with missing content.")
+                    logging.debug("Skipping message with missing content.")
                     continue
                 message = html.unescape(message_q.get_text(strip=True))
 

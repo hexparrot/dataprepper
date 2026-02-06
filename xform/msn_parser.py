@@ -64,7 +64,7 @@ class MsnParser(BaseParser):
                         }
                     )
                 else:
-                    logging.warning("Skipping incomplete chat entry.")
+                    logging.debug("Skipping incomplete chat entry.")
             except Exception as e:
                 logging.error(f"Error processing message: {e}")
                 continue

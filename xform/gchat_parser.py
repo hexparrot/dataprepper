@@ -78,7 +78,7 @@ class GchatParser(BaseParser):
                     continue
 
         except json.JSONDecodeError as e:
-            logging.warning(f"(GchatParser) Stdin not parsable as JSON.")
+            logging.debug(f"(GchatParser) Stdin not parsable as JSON.")
             return messages
 
         if not messages:
