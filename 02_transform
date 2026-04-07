@@ -1,243 +1,537 @@
 #!/usr/bin/env python3
+"""
+Chat log parser - processes organized chat directories and outputs structured JSON.
+
+Expected input structure:
+    userdata/raw/chat/{messenger}/{owner}/{participant}/files
+
+Output naming:
+    {messenger}-{owner}-{participant}-{original_filename}.json
+"""
+import re
 import os
 import sys
 import json
+import hashlib
 import logging
-from structs.chat_record import ChatRecord
-from structs.csv_record import CSVRecord, WazeCSVRecord
-from structs.myanimelist_record import MyAnimeListRecord
-from structs.youtube_record import YouTubeRecord
-from structs.image_record import ImageRecord
+from pathlib import Path
+from datetime import datetime
+from dataclasses import dataclass, field, asdict
+from typing import List, Optional
+from datetime import datetime, timedelta
 
-# Configure logging to stderr
+from xform.aimlogs_parser import AimLogsParser
+from xform.aimlogs2_parser import AimLogs2Parser
+from xform.aimlogs3_parser import AimLogs3Parser
+from xform.fbchat_parser import FbchatParser
+from xform.msn_parser import MsnParser
+from xform.gvoice_parser import GvoiceParser
+from xform.gchat_parser import GchatParser
+
 logging.basicConfig(
     stream=sys.stderr,
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
+logger = logging.getLogger(__name__)
 
-# Adjust paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-USERDATA_DIR = os.path.join(BASE_DIR, "userdata")
-RAW_DIR = os.path.join(USERDATA_DIR, "raw")
-TRANSFORMED_DIR = os.path.join(USERDATA_DIR, "transformed")
+BASE_DIR = Path(__file__).parent.resolve()
+RAW_CHAT_DIR = BASE_DIR / "userdata" / "raw" / "chat"
+TRANSFORMED_DIR = BASE_DIR / "userdata" / "transformed" / "chat"
+REPORT_DIR = BASE_DIR / "userdata" / "reports"
+
+VALID_EXTENSIONS = {".html", ".htm"}
 
 
-def parse_chat(raw_dir, transformed_dir):
+@dataclass
+class FileResult:
+    """Track the processing result for a single file."""
+
+    file_path: str
+    messenger: str
+    owner: str
+    participant: str
+    success: bool
+    failure_reason: Optional[str] = None
+    chosen_parser: Optional[str] = None
+    record_count: int = 0
+    date_corrections: int = 0
+    parser_results: dict = field(default_factory=dict)
+
+
+class ProcessingReport:
+    """Collect and report on all file processing results."""
+
+    def __init__(self):
+        self.results: List[FileResult] = []
+        self.start_time = datetime.now()
+        self.end_time: Optional[datetime] = None
+
+    def add_result(self, result: FileResult):
+        self.results.append(result)
+
+    def finalize(self):
+        self.end_time = datetime.now()
+
+    @property
+    def total(self) -> int:
+        return len(self.results)
+
+    @property
+    def successful(self) -> List[FileResult]:
+        return [r for r in self.results if r.success]
+
+    @property
+    def failed(self) -> List[FileResult]:
+        return [r for r in self.results if not r.success]
+
+    def get_failures_by_reason(self) -> dict:
+        """Group failures by their reason."""
+        by_reason = {}
+        for r in self.failed:
+            reason = r.failure_reason or "Unknown"
+            if reason not in by_reason:
+                by_reason[reason] = []
+            by_reason[reason].append(r.file_path)
+        return by_reason
+
+    def print_summary(self):
+        """Print a comprehensive summary to the logger."""
+        logger.info("=" * 70)
+        logger.info("PROCESSING SUMMARY")
+        logger.info("=" * 70)
+        logger.info(f"  Start time:  {self.start_time.isoformat()}")
+        logger.info(f"  End time:    {self.end_time.isoformat()}")
+        duration = (self.end_time - self.start_time).total_seconds()
+        logger.info(f"  Duration:    {duration:.2f} seconds")
+        logger.info("-" * 70)
+        logger.info(f"  Total files attempted: {self.total}")
+        logger.info(f"  Successful:            {len(self.successful)}")
+        logger.info(f"  Failed:                {len(self.failed)}")
+        if self.total > 0:
+            success_rate = (len(self.successful) / self.total) * 100
+            logger.info(f"  Success rate:          {success_rate:.1f}%")
+
+        if self.failed:
+            logger.info("-" * 70)
+            logger.info("FAILURES BY REASON:")
+            for reason, files in self.get_failures_by_reason().items():
+                logger.info(f"  [{reason}] ({len(files)} files)")
+                for f in files:
+                    logger.info(f"    - {f}")
+
+        logger.info("=" * 70)
+
+    def write_report(self, report_path: Path):
+        """Write detailed JSON report to file."""
+        report_data = {
+            "start_time": self.start_time.isoformat(),
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "summary": {
+                "total_files": self.total,
+                "successful": len(self.successful),
+                "failed": len(self.failed),
+            },
+            "failures_by_reason": self.get_failures_by_reason(),
+            "failed_files": [
+                {
+                    "file_path": r.file_path,
+                    "messenger": r.messenger,
+                    "owner": r.owner,
+                    "participant": r.participant,
+                    "failure_reason": r.failure_reason,
+                    "parser_results": r.parser_results,
+                }
+                for r in self.failed
+            ],
+            "successful_files": [
+                {
+                    "file_path": r.file_path,
+                    "messenger": r.messenger,
+                    "owner": r.owner,
+                    "participant": r.participant,
+                    "chosen_parser": r.chosen_parser,
+                    "record_count": r.record_count,
+                }
+                for r in self.successful
+            ],
+        }
+
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(report_path, "w", encoding="utf-8") as f:
+            json.dump(report_data, f, indent=2)
+        logger.info(f"Detailed report written to: {report_path}")
+
+
+def read_file_with_fallback(file_path):
+    """Try multiple encodings, return content or raise."""
+    encodings = [
+        ("utf-8", "strict"),
+        ("utf-8", "replace"),
+        ("latin-1", "strict"),  # latin-1 accepts any byte
+    ]
+
+    for encoding, errors in encodings:
+        try:
+            content = file_path.read_text(encoding=encoding, errors=errors)
+            if encoding != "utf-8" or errors != "strict":
+                logger.warning(f"  Read using {encoding}/{errors}: {file_path.name}")
+            return content
+        except UnicodeDecodeError:
+            continue
+
+    raise ValueError(f"Could not decode {file_path} with any encoding")
+
+
+def get_parsers():
+    """Instantiate all available chat parsers."""
+    return {
+        "AimLogsParser": AimLogsParser(),
+        "AimLogs2Parser": AimLogs2Parser(date_str="1970-01-01"),
+        "AimLogs3Parser": AimLogs3Parser(date_str="1970-01-01"),
+        "FbchatParser": FbchatParser(),
+        "MsnParser": MsnParser(),
+        "GvoiceParser": GvoiceParser(),
+        "GchatParser": GchatParser(),
+    }
+
+
+def run_all_parsers(file_content):
     """
-    Parses chat logs from raw_dir, processes with ChatRecord,
-    and writes structured JSON to transformed_dir.
+    Run all parsers on file content.
+    Returns dict of {parser_name: {"records": [...], "count": int, "error": str|None}}
     """
-    logging.info(f"Processing chat logs in {raw_dir}...")
-    ChatRecord.process_chat_directory(raw_dir, transformed_dir)
-    logging.info(f"Chat processing complete. JSON files saved in {transformed_dir}")
+    parsers = get_parsers()
+    results = {}
+
+    for name, parser in parsers.items():
+        try:
+            records = parser.parse(file_content)
+            count = len(records) if records else 0
+            error = None
+        except Exception as e:
+            logger.debug(f"    {name}: error - {e}")
+            records = []
+            count = 0
+            error = str(e)
+        results[name] = {"records": records, "count": count, "error": error}
+
+    return results
 
 
-def parse_csv(raw_dir, transformed_dir):
+def select_best_parser(results):
+    """Select parser with most records. Returns (name, records) or (None, [])."""
+    if not results:
+        return None, []
+
+    best_name = max(results, key=lambda k: results[k]["count"])
+    best = results[best_name]
+
+    if best["count"] == 0:
+        return None, []
+
+    return best_name, best["records"]
+
+
+def log_parser_results(results, chosen_name, file_path):
+    """Log the record count for each parser and which was selected."""
+    logger.info(f"  Parser results for {file_path.name}:")
+    for name, data in sorted(results.items(), key=lambda x: -x[1]["count"]):
+        marker = " <-- SELECTED" if name == chosen_name else ""
+        error_note = f" (error: {data['error']})" if data.get("error") else ""
+        logger.info(f"    {name}: {data['count']} records{marker}{error_note}")
+
+
+def build_output_filename(messenger, owner, participant, original_name):
+    """Build output filename: messenger-owner-participant-original_name.ndjson"""
+    stem = Path(original_name).stem
+    return f"{messenger}-{owner}-{participant}-{stem}.ndjson"
+
+
+def normalize_record(msg):
+    """Normalize a parsed message dict to standard output format."""
+    return {
+        "author": msg.get("author", "Unknown"),
+        "timestamp": msg.get("timestamp", "1970-01-01T00:00:00"),
+        "message": msg.get("message", ""),
+    }
+
+
+def compute_chat_id(records):
+    """Compute a stable hash of the chat records for deduplication."""
+    import json
+
+    # Sort by timestamp to ensure consistent ordering
+    sorted_records = sorted(
+        records,
+        key=lambda r: (
+            r.get("timestamp", ""),
+            r.get("author", ""),
+            r.get("message", ""),
+        ),
+    )
+    content_str = json.dumps(sorted_records, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(content_str.encode("utf-8")).hexdigest()
+
+
+def extract_date_from_filename(filename):
     """
-    Processes CSV data stored in `raw_dir` and converts it to JSON.
+    Extract date from filename. Expects patterns like:
+    - 2006-08-12 [Saturday].html
+    - 2006-08-12.html
+    Returns a datetime.date or None if not found.
     """
-    logging.info(f"Processing CSV data in {raw_dir}...")
-    record_handler = CSVRecord(raw_dir, transformed_dir)
-    record_handler.process_directory()
-    logging.info(f"CSV processing complete. JSON files saved in {transformed_dir}")
-
-
-def parse_json(raw_dir, transformed_dir):
-    """Recursively finds, validates, and copies JSON files from raw_dir to transformed_dir."""
-    import shutil
-
-    logging.info(f"Scanning for JSON and GEOJSON files in {raw_dir}...")
-
-    for root, _, files in os.walk(raw_dir):
-        for file in files:
-            raw_file_path = os.path.join(root, file)
-
-            # Separate logic for .geojson files
-            if file.endswith(".geojson"):
-                relative_path = os.path.relpath(raw_file_path, raw_dir)
-                transformed_file_path = os.path.join(
-                    transformed_dir, relative_path[:-8] + ".json"
-                )  # Rename .geojson to .json
-                file_type = "GEOJSON"
-            # Normal JSON file processing
-            elif file.endswith(".json"):
-                relative_path = os.path.relpath(raw_file_path, raw_dir)
-                transformed_file_path = os.path.join(transformed_dir, relative_path)
-                file_type = "JSON"
-            else:
-                continue  # Skip non-JSON files
-
-            try:
-                # Open and validate JSON
-                with open(raw_file_path, "r", encoding="utf-8") as f:
-                    json.load(f)
-
-                # Ensure the subdirectory structure exists in transformed_dir
-                os.makedirs(os.path.dirname(transformed_file_path), exist_ok=True)
-                shutil.copy2(raw_file_path, transformed_file_path)
-                logging.info(
-                    f"Validated & Copied ({file_type}): {raw_file_path} -> {transformed_file_path}"
-                )
-            except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                logging.warning(f"Invalid {file_type} skipped: {raw_file_path} ({e})")
-
-
-def parse_csv_json(raw_dir, transformed_dir):
-    """
-    Processes directories containing both CSV and JSON files.
-    - CSV files are processed using CSVRecord.
-    - JSON files are copied as-is to transformed_dir.
-    """
-    import shutil
-
-    logging.info(f"Processing CSV and JSON files in {raw_dir}...")
-
-    # Process CSV files
-    record_handler = CSVRecord(raw_dir, transformed_dir)
-    record_handler.process_directory()
-    logging.info(f"CSV processing complete. JSON files saved in {transformed_dir}")
-
-    # Process JSON files
-    for root, _, files in os.walk(raw_dir):
-        for file in files:
-            if file.endswith(".json"):
-                raw_file_path = os.path.join(root, file)
-                relative_path = os.path.relpath(raw_file_path, raw_dir)
-                transformed_file_path = os.path.join(transformed_dir, relative_path)
-
-                # Ensure the subdirectory structure exists in transformed_dir
-                os.makedirs(os.path.dirname(transformed_file_path), exist_ok=True)
-
-                # Copy the file
-                shutil.copy2(raw_file_path, transformed_file_path)
-                logging.info(
-                    f"Copied JSON file: {raw_file_path} -> {transformed_file_path}"
-                )
-
-    logging.info(f"CSV and JSON processing complete. Files saved in {transformed_dir}")
-
-
-def parse_waze(raw_dir, transformed_dir):
-    """
-    Processes Waze CSV data, splitting stanzas and structuring JSON output.
-    """
-    logging.info(f"Processing Waze CSV data in {raw_dir}...")
-    record_handler = WazeCSVRecord(raw_dir, transformed_dir)
-    record_handler.process_waze_csv()
-    logging.info(f"Waze processing complete. JSON files saved in {transformed_dir}")
-
-
-def parse_myanimelist(raw_dir, transformed_dir):
-    """
-    Processes MyAnimeList XML exports and converts them to JSON.
-    """
-    logging.info(f"Processing MyAnimeList XML in {raw_dir}...")
-
-    for file in os.listdir(raw_dir):
-        file_path = os.path.join(raw_dir, file)
-        if file.endswith(".xml"):
-            with open(file_path, "r", encoding="utf-8") as f:
-                xml_content = f.read().strip()  # Ensure proper XML formatting
-
-            if not xml_content:
-                logging.warning(f"Skipping empty XML file: {file_path}")
-                continue  # Skip empty files
-
-            records = MyAnimeListRecord.parse_from_xml(xml_content)
-
-            output_file = os.path.join(
-                transformed_dir, f"{os.path.splitext(file)[0]}.json"
+    # Match YYYY-MM-DD pattern
+    match = re.search(r"(\d{4})-(\d{2})-(\d{2})", filename)
+    if match:
+        try:
+            year, month, day = (
+                int(match.group(1)),
+                int(match.group(2)),
+                int(match.group(3)),
             )
-            with open(output_file, "w", encoding="utf-8") as f:
-                json.dump(records, f, indent=4)
+            return datetime(year, month, day).date()
+        except ValueError as e:
+            logger.warning(f"  Invalid date in filename '{filename}': {e}")
+            return None
+    return None
 
-            logging.info(f"Saved processed MyAnimeList records to {output_file}")
+
+def is_epoch_date(timestamp_str):
+    """Check if timestamp has the Unix epoch date (1970-01-01)."""
+    return timestamp_str.startswith("1970-01-01")
 
 
-def parse_youtube(raw_dir, transformed_dir):
+def parse_timestamp(timestamp_str):
+    """Parse an ISO timestamp string into a datetime object."""
+    # Handle various formats
+    for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f"]:
+        try:
+            return datetime.strptime(timestamp_str, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def correct_record_dates(records, filename_date, file_path):
     """
-    Processes YouTube Watch History HTML files and converts them to JSON.
+    Correct records that have suspicious dates.
+
+    - If a record has the epoch date (1970-01-01), replace date with filename_date
+    - If a record's date deviates from filename_date by more than 2 days, replace it
+    - Always preserve the original time portion
+
+    Returns the corrected records list and a count of corrections made.
     """
-    logging.info(f"Processing YouTube Watch History in {raw_dir}...")
-    for file in os.listdir(raw_dir):
-        file_path = os.path.join(raw_dir, file)
-        if file.endswith(".html"):
-            with open(file_path, "r", encoding="utf-8") as f:
-                html_content = f.read()
-            records = YouTubeRecord.parse(html_content)
-            output_file = os.path.join(
-                transformed_dir, f"{os.path.splitext(file)[0]}.json"
-            )
-            with open(output_file, "w", encoding="utf-8") as f:
-                json.dump(records, f, indent=4)
-            logging.info(f"Saved processed YouTube records to {output_file}")
+    if not filename_date:
+        logger.debug(f"  No filename date available for correction: {file_path.name}")
+        return records, 0
+
+    corrected_records = []
+    correction_count = 0
+    epoch_corrections = 0
+    deviation_corrections = 0
+
+    for record in records:
+        timestamp_str = record.get("timestamp", "")
+        corrected_record = record.copy()
+
+        # Check for epoch date (definite problem)
+        if is_epoch_date(timestamp_str):
+            parsed = parse_timestamp(timestamp_str)
+            if parsed:
+                # Keep time, replace date
+                corrected_dt = datetime.combine(filename_date, parsed.time())
+                corrected_record["timestamp"] = corrected_dt.strftime(
+                    "%Y-%m-%dT%H:%M:%S"
+                )
+                epoch_corrections += 1
+                correction_count += 1
+                logger.debug(
+                    f"    Epoch date corrected: {timestamp_str} -> {corrected_record['timestamp']}"
+                )
+        else:
+            # Check for large deviation from filename date
+            parsed = parse_timestamp(timestamp_str)
+            if parsed:
+                record_date = parsed.date()
+                deviation_days = abs((record_date - filename_date).days)
+
+                if deviation_days > 2:
+                    # Suspicious deviation - replace date but keep time
+                    corrected_dt = datetime.combine(filename_date, parsed.time())
+                    corrected_record["timestamp"] = corrected_dt.strftime(
+                        "%Y-%m-%dT%H:%M:%S"
+                    )
+                    deviation_corrections += 1
+                    correction_count += 1
+                    logger.debug(
+                        f"    Date deviation ({deviation_days} days) corrected: "
+                        f"{timestamp_str} -> {corrected_record['timestamp']}"
+                    )
+
+        corrected_records.append(corrected_record)
+
+    # Summary logging
+    if correction_count > 0:
+        logger.info(
+            f"  Date corrections applied: {correction_count} total "
+            f"(epoch: {epoch_corrections}, deviation: {deviation_corrections})"
+        )
+
+    return corrected_records, correction_count
 
 
-def parse_exif(raw_dir, transformed_dir):
+def process_file(
+    file_path, messenger, owner, participant, output_dir, seen_chat_ids
+) -> FileResult:
+    """Process a single chat file through all parsers."""
+    logger.info(f"Processing: {file_path}")
+
+    result = FileResult(
+        file_path=str(file_path),
+        messenger=messenger,
+        owner=owner,
+        participant=participant,
+        success=False,
+    )
+
+    # Attempt to read file
+    try:
+        content = read_file_with_fallback(file_path)
+    except Exception as e:
+        logger.error(f"  Failed to read file: {e}")
+        result.failure_reason = f"Read error: {e}"
+        return result
+
+    # Run parsers
+    parser_results = run_all_parsers(content)
+    chosen_name, records = select_best_parser(parser_results)
+
+    # Store parser results summary (without full records for report size)
+    result.parser_results = {
+        name: {"count": data["count"], "error": data.get("error")}
+        for name, data in parser_results.items()
+    }
+
+    log_parser_results(parser_results, chosen_name, file_path)
+
+    if not records:
+        logger.warning(f"  No records extracted from {file_path.name}")
+        result.failure_reason = "No records extracted by any parser"
+        return result
+
+    result.chosen_parser = chosen_name
+    result.record_count = len(records)
+
+    # Extract date from filename for potential corrections
+    filename_date = extract_date_from_filename(file_path.name)
+    if filename_date:
+        logger.debug(f"  Filename date extracted: {filename_date}")
+    else:
+        logger.warning(f"  Could not extract date from filename: {file_path.name}")
+
+    # Normalize records
+    normalized = [normalize_record(msg) for msg in records]
+
+    # Correct any suspicious dates
+    corrected, correction_count = correct_record_dates(
+        normalized, filename_date, file_path
+    )
+
+    if correction_count > 0:
+        result.parser_results["date_corrections"] = correction_count
+
+    # Check for duplicate content via chat_id
+    chat_id = compute_chat_id(corrected)
+    if chat_id in seen_chat_ids:
+        logger.info(f"  Skipping duplicate content (chat_id: {chat_id[:12]}...)")
+        result.failure_reason = "Duplicate content (matching chat_id)"
+        return result
+
+    seen_chat_ids.add(chat_id)
+
+    output_filename = build_output_filename(
+        messenger, owner, participant, file_path.name
+    )
+    output_path = output_dir / output_filename
+
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            for record in corrected:
+                json.dump(record, f)
+                f.write("\n")
+        logger.info(f"  Saved {len(corrected)} records to {output_path.name}")
+        result.success = True
+        return result
+    except Exception as e:
+        logger.error(f"  Failed to write output: {e}")
+        result.failure_reason = f"Write error: {e}"
+        return result
+
+
+def walk_chat_directory(base_dir):
     """
-    Processes images in raw_dir, extracts EXIF data,
-    and writes structured JSON to transformed_dir using ImageRecord.
+    Yield (file_path, messenger, owner, participant) for each chat file.
+
+    Recursively walks through nested directories under participant level.
+    Expected structure: base_dir/{messenger}/{owner}/{participant}/[subfolders/]files
     """
-    logging.info(f"Processing EXIF data in {raw_dir}...")
-    image_record = ImageRecord(raw_dir, transformed_dir)
-    records = ImageRecord.process_directory(
-        raw_dir, transformed_dir
-    )  # Returns list of processed images
+    for messenger_dir in sorted(base_dir.iterdir()):
+        if not messenger_dir.is_dir():
+            continue
+        messenger = messenger_dir.name
 
-    output_file = os.path.join(transformed_dir, "exif_data.json")
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(records, f, indent=4)
-    logging.info(f"Saved EXIF data to {output_file}")
+        for owner_dir in sorted(messenger_dir.iterdir()):
+            if not owner_dir.is_dir():
+                continue
+            owner = owner_dir.name
 
+            for participant_dir in sorted(owner_dir.iterdir()):
+                if not participant_dir.is_dir():
+                    continue
+                participant = participant_dir.name
 
-PARSERS = {
-    "chat": parse_chat,
-    "images": parse_exif,
-    "apple": parse_csv_json,
-    "fitbit": parse_csv_json,
-    "github": parse_json,
-    "geojson": parse_json,
-    "lyft": parse_csv,
-    "netflix": parse_csv,
-    "pokemongo": parse_csv,
-    "reddit": parse_csv,
-    "spotify": parse_json,
-    "waze": parse_waze,
-    "myanimelist": parse_myanimelist,
-    "youtube": parse_youtube,
-}
-
-
-def ensure_output_dir_exists(directory):
-    """Ensure that the output directory exists."""
-    if not os.path.exists(directory):
-        os.makedirs(directory, exist_ok=True)
+                # Recursively find all files under participant directory
+                for file_path in sorted(participant_dir.rglob("*")):
+                    if (
+                        file_path.is_file()
+                        and file_path.suffix.lower() in VALID_EXTENSIONS
+                    ):
+                        yield file_path, messenger, owner, participant
 
 
 def main():
-    logging.info("Starting omni-parser.")
-    ensure_output_dir_exists(TRANSFORMED_DIR)
+    logger.info("=" * 70)
+    logger.info("Chat Log Parser - Starting")
+    logger.info("=" * 70)
 
-    if not os.path.isdir(RAW_DIR):
-        logging.error(f"RAW_DIR does not exist: {RAW_DIR}")
+    if not RAW_CHAT_DIR.exists():
+        logger.error(f"Input directory does not exist: {RAW_CHAT_DIR}")
         sys.exit(1)
 
-    for entry in os.listdir(RAW_DIR):
-        raw_subdir_path = os.path.join(RAW_DIR, entry)
-        if os.path.isdir(raw_subdir_path):
-            logging.info(f"Found directory: {entry}")
-            parser_func = PARSERS.get(entry)
-            if parser_func:
-                transformed_subdir_path = os.path.join(TRANSFORMED_DIR, entry)
-                ensure_output_dir_exists(transformed_subdir_path)
-                parser_func(raw_subdir_path, transformed_subdir_path)
-            else:
-                logging.warning(f"No parser found for directory: {entry}")
-        else:
-            logging.warning(f"Skipping file in raw root: {entry}")
+    TRANSFORMED_DIR.mkdir(parents=True, exist_ok=True)
 
-    logging.info("Finished omni-parser.")
+    report = ProcessingReport()
+    seen_chat_ids = set()
+
+    for file_path, messenger, owner, participant in walk_chat_directory(RAW_CHAT_DIR):
+        result = process_file(
+            file_path, messenger, owner, participant, TRANSFORMED_DIR, seen_chat_ids
+        )
+        report.add_result(result)
+
+    report.finalize()
+    report.print_summary()
+
+    # Write detailed JSON report
+    timestamp = report.start_time.strftime("%Y%m%d_%H%M%S")
+    report_path = REPORT_DIR / f"parse_report_{timestamp}.json"
+    report.write_report(report_path)
+
+    # Exit with error code if any failures
+    if report.failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
