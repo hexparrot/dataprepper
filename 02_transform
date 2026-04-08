@@ -22,6 +22,7 @@ from typing import List, Optional
 from xform.aimlogs_parser import AimLogsParser
 from xform.aimlogs2_parser import AimLogs2Parser
 from xform.aimlogs3_parser import AimLogs3Parser
+from xform.aimlogs4_parser import AimLogs4Parser
 from xform.fbchat_parser import FbchatParser
 from xform.msn_parser import MsnParser
 from xform.gvoice_parser import GvoiceParser
@@ -44,6 +45,7 @@ VALID_EXTENSIONS = {".html", ".htm"}
 # Parsers listed here are preferred when record counts are tied.
 # Earlier entries beat later entries in a tie.
 PREFERRED_PARSERS = [
+    "AimLogs4Parser",
     "AimLogs3Parser",
     "AimLogs2Parser",
     "AimLogsParser",
@@ -190,9 +192,13 @@ def read_file_with_fallback(file_path):
     raise ValueError(f"Could not decode {file_path} with any encoding")
 
 
-def get_parsers():
-    """Return all available chat parsers as (name, parser) tuples."""
-    return [
+def run_all_parsers(file_content, owner=None, participant=None):
+    """
+    Run all parsers on file content.
+    Returns dict of {parser_name: {"records": [...], "count": int, "error": str|None}}
+    """
+    all_parsers = [
+        ("AimLogs4Parser", AimLogs4Parser("1970-01-01", owner, participant)),
         ("AimLogs3Parser", AimLogs3Parser(date_str="1970-01-01")),
         ("AimLogsParser", AimLogsParser()),
         ("AimLogs2Parser", AimLogs2Parser(date_str="1970-01-01")),
@@ -202,14 +208,8 @@ def get_parsers():
         ("GchatParser", GchatParser()),
     ]
 
-
-def run_all_parsers(file_content):
-    """
-    Run all parsers on file content.
-    Returns dict of {parser_name: {"records": [...], "count": int, "error": str|None}}
-    """
     results = {}
-    for name, parser in get_parsers():
+    for name, parser in all_parsers:
         try:
             records = parser.parse(file_content) or []
             results[name] = {"records": records, "count": len(records), "error": None}
@@ -394,7 +394,7 @@ def process_file(
         result.failure_reason = f"Read error: {e}"
         return result
 
-    parser_results = run_all_parsers(content)
+    parser_results = run_all_parsers(content, owner, participant)
     chosen_name, records = select_best_parser(parser_results)
 
     result.parser_results = {
