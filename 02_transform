@@ -221,6 +221,52 @@ def author_breakdown(records):
     }
 
 
+def _slug(s):
+    """Lowercase and remove spaces for comparison purposes only."""
+    return s.lower().replace(" ", "")
+
+
+def strip_trailing_author_suffix(records):
+    """
+    When lines are merged during parsing, the message field often ends with
+    the next record's author name as a trailing suffix. Strip it if found.
+    Comparison is done on slugged (lowercased, space-stripped) forms.
+    """
+    for i, record in enumerate(records):
+        if i + 1 >= len(records):
+            break
+
+        next_author = records[i + 1].get("author", "")
+        if not next_author or next_author == "unknown":
+            continue
+
+        next_author_slug = _slug(next_author)
+        message = record.get("message", "")
+        message_slug = _slug(message)
+
+        if message_slug.endswith(next_author_slug):
+            # Work out how many original characters to remove by walking
+            # backwards through the original message, counting only the
+            # non-space characters that correspond to the slug suffix.
+            chars_to_match = len(next_author_slug)
+            trim_pos = len(message)
+            matched = 0
+
+            while trim_pos > 0 and matched < chars_to_match:
+                trim_pos -= 1
+                if message[trim_pos] != " ":
+                    matched += 1
+
+            cleaned = message[:trim_pos].rstrip()
+            logger.debug(
+                f"  Stripped trailing author suffix {next_author!r} from message: {message!r}"
+            )
+            records[i] = dict(record)
+            records[i]["message"] = cleaned
+
+    return records
+
+
 def unknown_author_ratio(records):
     """Return the fraction of records with an unknown/missing author."""
     return author_breakdown(records)["unknown_ratio"]
@@ -270,6 +316,7 @@ def run_all_parsers(file_content, owner=None, participant=None):
         try:
             raw_records = parser.parse(file_content) or []
             records = [normalize_record(r) for r in raw_records]
+            records = strip_trailing_author_suffix(records)
             results[name] = {"records": records, "count": len(records), "error": None}
         except Exception as e:
             logger.debug(f"    {name}: error - {e}")
