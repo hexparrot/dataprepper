@@ -9,14 +9,15 @@ Output naming:
     {messenger}-{owner}-{participant}-{original_filename}.json
 """
 import re
-import os
 import sys
 import json
 import hashlib
 import logging
+import tempfile
+from collections import Counter
 from pathlib import Path
-from datetime import datetime, timedelta
-from dataclasses import dataclass, field, asdict
+from datetime import datetime
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 from xform.aimlogs_parser import AimLogsParser
@@ -45,15 +46,20 @@ VALID_EXTENSIONS = {".html", ".htm"}
 # Parsers listed here are preferred when record counts are tied.
 # Earlier entries beat later entries in a tie.
 PREFERRED_PARSERS = [
+    "MsnParser",
     "AimLogs4Parser",
     "AimLogs3Parser",
     "AimLogs2Parser",
     "AimLogsParser",
-    "MsnParser",
     "FbchatParser",
     "GvoiceParser",
     "GchatParser",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Data structures
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -174,6 +180,57 @@ class ProcessingReport:
         logger.info(f"Detailed report written to: {report_path}")
 
 
+# ---------------------------------------------------------------------------
+# Author analysis
+# ---------------------------------------------------------------------------
+
+
+def author_breakdown(records):
+    """
+    Return a summary dict with:
+      - 'counts': Counter of author -> record count (unknown authors keyed as 'Unknown')
+      - 'unknown_count': number of unknown/missing authors
+      - 'unknown_ratio': fraction of records with unknown/missing authors
+      - 'total': total record count
+    """
+    if not records:
+        return {
+            "counts": Counter(),
+            "unknown_count": 0,
+            "unknown_ratio": 1.0,
+            "total": 0,
+        }
+
+    counts = Counter()
+    unknown_count = 0
+
+    for r in records:
+        author = r.get("author", "").strip()
+        if not author or author.lower() == "unknown":
+            counts["Unknown"] += 1
+            unknown_count += 1
+        else:
+            counts[author] += 1
+
+    total = len(records)
+    return {
+        "counts": counts,
+        "unknown_count": unknown_count,
+        "unknown_ratio": unknown_count / total,
+        "total": total,
+    }
+
+
+def unknown_author_ratio(records):
+    """Return the fraction of records with an unknown/missing author."""
+    return author_breakdown(records)["unknown_ratio"]
+
+
+# ---------------------------------------------------------------------------
+# Parser orchestration
+# ---------------------------------------------------------------------------
+
+
 def read_file_with_fallback(file_path):
     """Try multiple encodings; return content or raise."""
     encodings = [
@@ -211,7 +268,8 @@ def run_all_parsers(file_content, owner=None, participant=None):
     results = {}
     for name, parser in all_parsers:
         try:
-            records = parser.parse(file_content) or []
+            raw_records = parser.parse(file_content) or []
+            records = [normalize_record(r) for r in raw_records]
             results[name] = {"records": records, "count": len(records), "error": None}
         except Exception as e:
             logger.debug(f"    {name}: error - {e}")
@@ -219,15 +277,13 @@ def run_all_parsers(file_content, owner=None, participant=None):
     return results
 
 
-def select_best_parser(results, preferred=None, unknown_threshold=0.1):
+def select_best_parser(results, preferred=None, count_tolerance=0.20):
     """
-    Select the parser with the most records.
-    Ties are broken by:
-      1. Unknown author ratio (lower is better)
-      2. Position in `preferred` (earlier = higher priority)
+    Select the best parser by record count, with unknown-author ratio as a
+    tiebreaker within a tolerance band.
 
-    If the best-by-count parser exceeds unknown_threshold, prefer any
-    same-count (or close-count) parser with fewer unknowns.
+    Parsers within `count_tolerance` (fraction) of the highest count are
+    considered tied; among those, fewest unknowns wins, then preferred rank.
 
     Returns (name, records) or (None, []).
     """
@@ -241,43 +297,67 @@ def select_best_parser(results, preferred=None, unknown_threshold=0.1):
     if max_count == 0:
         return None, []
 
+    # Floor of the "close enough" band
+    threshold_count = max_count * (1.0 - count_tolerance)
+
     def sort_key(name):
         data = results[name]
         count = data["count"]
-        records = data["records"]
-        ratio = unknown_author_ratio(records)
+        ratio = unknown_author_ratio(data["records"])
         try:
             rank = preferred.index(name)
         except ValueError:
             rank = len(preferred)
-        # Primary: most records; secondary: fewest unknowns; tertiary: preferred rank
-        return (-count, ratio, rank)
+
+        # Parsers below the tolerance band are sorted strictly after those inside it
+        in_band = count >= threshold_count
+        return (
+            not in_band,  # False (0) sorts before True (1) -> in-band parsers first
+            ratio,  # fewest unknowns wins within the band
+            -count,  # most records wins among equal-ratio parsers
+            rank,  # preferred rank as final tiebreaker
+        )
 
     best_name = min(results, key=sort_key)
-    best = results[best_name]
-
-    return best_name, best["records"]
-
-
-def unknown_author_ratio(records):
-    """Return the fraction of records with an unknown/missing author."""
-    if not records:
-        return 1.0
-    unknown = sum(
-        1
-        for r in records
-        if not r.get("author") or r.get("author", "").strip().lower() == "unknown"
-    )
-    return unknown / len(records)
+    return best_name, results[best_name]["records"]
 
 
 def log_parser_results(results, chosen_name, file_path):
-    """Log the record count for each parser and which was selected."""
+    """
+    Log the record count, author breakdown, and selection marker for each parser.
+    Parsers are sorted by record count descending; zero-count parsers are omitted
+    unless they produced an error.
+    """
     logger.info(f"  Parser results for {file_path.name}:")
-    for name, data in sorted(results.items(), key=lambda x: -x[1]["count"]):
+
+    sorted_parsers = sorted(results.items(), key=lambda x: -x[1]["count"])
+
+    for name, data in sorted_parsers:
+        count = data["count"]
+        error = data.get("error")
+
+        # Skip zero-count, error-free parsers to keep logs concise
+        if count == 0 and not error:
+            continue
+
         marker = " <-- SELECTED" if name == chosen_name else ""
-        error_note = f" (error: {data['error']})" if data.get("error") else ""
-        logger.info(f"    {name}: {data['count']} records{marker}{error_note}")
+        error_note = f" (error: {error})" if error else ""
+        logger.info(f"    {name}: {count} records{marker}{error_note}")
+
+        if count > 0:
+            bd = author_breakdown(data["records"])
+            unknown_pct = bd["unknown_ratio"] * 100
+            logger.info(
+                f"      authors: {bd['unknown_count']} unknown ({unknown_pct:.1f}%)"
+                f" of {bd['total']} total"
+            )
+            for author, cnt in bd["counts"].most_common():
+                logger.info(f"        {author}: {cnt}")
+
+
+# ---------------------------------------------------------------------------
+# Record helpers
+# ---------------------------------------------------------------------------
 
 
 def build_output_filename(messenger, owner, participant, original_name):
@@ -288,8 +368,41 @@ def build_output_filename(messenger, owner, participant, original_name):
 
 def normalize_record(msg):
     """Normalize a parsed message dict to the standard output format."""
+    raw_author = msg.get("author", "Unknown")
+
+    if ":" in raw_author:
+        paren_open = raw_author.find("(")
+        paren_close = raw_author.find(")")
+
+        if 0 < paren_open < paren_close:
+            salvaged_author = raw_author[:paren_open].strip()
+            salvaged_time = raw_author[paren_open + 1 : paren_close].strip()
+            logger.warning(
+                f"  Colon detected in author field; salvaged author={salvaged_author!r} "
+                f"time={salvaged_time!r} from: {raw_author!r}"
+            )
+            raw_author = salvaged_author
+
+            # Only overwrite timestamp if we actually got something
+            existing_ts = msg.get("timestamp", "")
+            if salvaged_time and (
+                not existing_ts or existing_ts == "1970-01-01T00:00:00"
+            ):
+                msg = dict(msg)  # avoid mutating the original
+                msg[
+                    "timestamp"
+                ] = salvaged_time  # caller/date-correction will normalize format
+        else:
+            logger.warning(
+                f"  Colon detected in author field and could not salvage; "
+                f"marking Unknown. Raw value: {raw_author!r}"
+            )
+            raw_author = "Unknown"
+
+    author = raw_author.lower().replace(" ", "")
+
     return {
-        "author": msg.get("author", "Unknown"),
+        "author": author,
         "timestamp": msg.get("timestamp", "1970-01-01T00:00:00"),
         "message": msg.get("message", ""),
     }
@@ -396,6 +509,11 @@ def correct_record_dates(records, filename_date, file_path):
     return corrected_records, correction_count
 
 
+# ---------------------------------------------------------------------------
+# File processing
+# ---------------------------------------------------------------------------
+
+
 def process_file(
     file_path, messenger, owner, participant, output_dir, seen_chat_ids
 ) -> FileResult:
@@ -420,8 +538,14 @@ def process_file(
     parser_results = run_all_parsers(content, owner, participant)
     chosen_name, records = select_best_parser(parser_results)
 
+    # Store per-parser summary (including author breakdown) for the JSON report
     result.parser_results = {
-        name: {"count": data["count"], "error": data.get("error")}
+        name: {
+            "count": data["count"],
+            "error": data.get("error"),
+            "author_counts": dict(author_breakdown(data["records"])["counts"]),
+            "unknown_count": author_breakdown(data["records"])["unknown_count"],
+        }
         for name, data in parser_results.items()
     }
 
@@ -441,13 +565,12 @@ def process_file(
     else:
         logger.warning(f"  Could not extract date from filename: {file_path.name}")
 
-    normalized = [normalize_record(msg) for msg in records]
     corrected, correction_count = correct_record_dates(
-        normalized, filename_date, file_path
+        records, filename_date, file_path
     )
 
     if correction_count > 0:
-        result.parser_results["date_corrections"] = correction_count
+        result.date_corrections = correction_count
 
     chat_id = compute_chat_id(corrected)
     if chat_id in seen_chat_ids:
@@ -462,17 +585,34 @@ def process_file(
     )
 
     try:
-        with open(output_path, "w", encoding="utf-8") as f:
+        # Write to a sibling temp file, then atomically replace the target
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=output_path.parent,
+            delete=False,
+            suffix=".tmp",
+        ) as tmp:
+            tmp_path = Path(tmp.name)
             for record in corrected:
-                json.dump(record, f)
-                f.write("\n")
+                json.dump(record, tmp)
+                tmp.write("\n")
+        tmp_path.replace(output_path)  # atomic on POSIX
         logger.info(f"  Saved {len(corrected)} records to {output_path.name}")
         result.success = True
     except Exception as e:
         logger.error(f"  Failed to write output: {e}")
         result.failure_reason = f"Write error: {e}"
+        # Clean up temp file if it exists
+        if tmp_path and tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Directory walking
+# ---------------------------------------------------------------------------
 
 
 def walk_chat_directory(base_dir):
@@ -495,7 +635,17 @@ def walk_chat_directory(base_dir):
                         file_path.is_file()
                         and file_path.suffix.lower() in VALID_EXTENSIONS
                     ):
-                        yield file_path, messenger_dir.name, owner_dir.name, participant_dir.name
+                        yield (
+                            file_path,
+                            messenger_dir.name,
+                            owner_dir.name,
+                            participant_dir.name,
+                        )
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 
 def main():
