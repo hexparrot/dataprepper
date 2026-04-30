@@ -49,8 +49,8 @@ PREFERRED_PARSERS = [
     "AimLogs3Parser",
     "AimLogs2Parser",
     "AimLogsParser",
-    "FbchatParser",
     "MsnParser",
+    "FbchatParser",
     "GvoiceParser",
     "GchatParser",
 ]
@@ -219,10 +219,16 @@ def run_all_parsers(file_content, owner=None, participant=None):
     return results
 
 
-def select_best_parser(results, preferred=None):
+def select_best_parser(results, preferred=None, unknown_threshold=0.1):
     """
     Select the parser with the most records.
-    Ties are broken by position in `preferred` (earlier = higher priority).
+    Ties are broken by:
+      1. Unknown author ratio (lower is better)
+      2. Position in `preferred` (earlier = higher priority)
+
+    If the best-by-count parser exceeds unknown_threshold, prefer any
+    same-count (or close-count) parser with fewer unknowns.
+
     Returns (name, records) or (None, []).
     """
     if not results:
@@ -231,21 +237,38 @@ def select_best_parser(results, preferred=None):
     if preferred is None:
         preferred = PREFERRED_PARSERS
 
+    max_count = max(data["count"] for data in results.values())
+    if max_count == 0:
+        return None, []
+
     def sort_key(name):
-        count = results[name]["count"]
+        data = results[name]
+        count = data["count"]
+        records = data["records"]
+        ratio = unknown_author_ratio(records)
         try:
             rank = preferred.index(name)
         except ValueError:
-            rank = len(preferred)  # unknown parsers sort last
-        return (-count, rank)
+            rank = len(preferred)
+        # Primary: most records; secondary: fewest unknowns; tertiary: preferred rank
+        return (-count, ratio, rank)
 
     best_name = min(results, key=sort_key)
     best = results[best_name]
 
-    if best["count"] == 0:
-        return None, []
-
     return best_name, best["records"]
+
+
+def unknown_author_ratio(records):
+    """Return the fraction of records with an unknown/missing author."""
+    if not records:
+        return 1.0
+    unknown = sum(
+        1
+        for r in records
+        if not r.get("author") or r.get("author", "").strip().lower() == "unknown"
+    )
+    return unknown / len(records)
 
 
 def log_parser_results(results, chosen_name, file_path):

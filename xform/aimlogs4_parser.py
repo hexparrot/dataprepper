@@ -112,7 +112,7 @@ class AimLogs4Parser(BaseParser):
             if author_match:
                 author = self._identify_author(author_match.group(1))
             else:
-                logging.warning(
+                logging.debug(
                     f"Could not identify author in pre_text for ts={ts_str!r}: "
                     f"{pre_text[-80:]!r}"
                 )
