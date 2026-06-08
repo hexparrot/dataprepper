@@ -1,243 +1,781 @@
 #!/usr/bin/env python3
-import os
+"""
+Chat log parser - processes organized chat directories and outputs structured JSON.
+
+Expected input structure:
+    userdata/raw/chat/{messenger}/{owner}/{participant}/files
+
+Output naming:
+    {messenger}-{owner}-{participant}-{original_filename}.json
+"""
+import re
 import sys
 import json
+import hashlib
 import logging
-from structs.chat_record import ChatRecord
-from structs.csv_record import CSVRecord, WazeCSVRecord
-from structs.myanimelist_record import MyAnimeListRecord
-from structs.youtube_record import YouTubeRecord
-from structs.image_record import ImageRecord
+import tempfile
+from collections import Counter
+from pathlib import Path
+from datetime import datetime
+from dataclasses import dataclass, field
+from typing import List, Optional
 
-# Configure logging to stderr
+from xform.aimlogs_parser import AimLogsParser
+from xform.aimlogs2_parser import AimLogs2Parser
+from xform.aimlogs3_parser import AimLogs3Parser
+from xform.aimlogs4_parser import AimLogs4Parser
+from xform.fbchat_parser import FbchatParser
+from xform.msn_parser import MsnParser
+from xform.gvoice_parser import GvoiceParser
+from xform.gchat_parser import GchatParser
+
 logging.basicConfig(
     stream=sys.stderr,
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
+logger = logging.getLogger(__name__)
 
-# Adjust paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-USERDATA_DIR = os.path.join(BASE_DIR, "userdata")
-RAW_DIR = os.path.join(USERDATA_DIR, "raw")
-TRANSFORMED_DIR = os.path.join(USERDATA_DIR, "transformed")
+BASE_DIR = Path(__file__).parent.resolve()
+RAW_CHAT_DIR = BASE_DIR / "userdata" / "raw" / "chat"
+TRANSFORMED_DIR = BASE_DIR / "userdata" / "transformed" / "chat"
+REPORT_DIR = BASE_DIR / "userdata" / "reports"
 
+VALID_EXTENSIONS = {".html", ".htm"}
 
-def parse_chat(raw_dir, transformed_dir):
-    """
-    Parses chat logs from raw_dir, processes with ChatRecord,
-    and writes structured JSON to transformed_dir.
-    """
-    logging.info(f"Processing chat logs in {raw_dir}...")
-    ChatRecord.process_chat_directory(raw_dir, transformed_dir)
-    logging.info(f"Chat processing complete. JSON files saved in {transformed_dir}")
+# Successfully-parsed files whose JSON output is below this fraction of the
+# original file size are flagged as "suspected incomplete parse". Heuristic and
+# tunable: HTML markup overhead means good parses are already a small fraction
+# of the input, so this threshold is deliberately low.
+LOW_YIELD_RATIO = 0.05
 
-
-def parse_csv(raw_dir, transformed_dir):
-    """
-    Processes CSV data stored in `raw_dir` and converts it to JSON.
-    """
-    logging.info(f"Processing CSV data in {raw_dir}...")
-    record_handler = CSVRecord(raw_dir, transformed_dir)
-    record_handler.process_directory()
-    logging.info(f"CSV processing complete. JSON files saved in {transformed_dir}")
-
-
-def parse_json(raw_dir, transformed_dir):
-    """Recursively finds, validates, and copies JSON files from raw_dir to transformed_dir."""
-    import shutil
-
-    logging.info(f"Scanning for JSON and GEOJSON files in {raw_dir}...")
-
-    for root, _, files in os.walk(raw_dir):
-        for file in files:
-            raw_file_path = os.path.join(root, file)
-
-            # Separate logic for .geojson files
-            if file.endswith(".geojson"):
-                relative_path = os.path.relpath(raw_file_path, raw_dir)
-                transformed_file_path = os.path.join(
-                    transformed_dir, relative_path[:-8] + ".json"
-                )  # Rename .geojson to .json
-                file_type = "GEOJSON"
-            # Normal JSON file processing
-            elif file.endswith(".json"):
-                relative_path = os.path.relpath(raw_file_path, raw_dir)
-                transformed_file_path = os.path.join(transformed_dir, relative_path)
-                file_type = "JSON"
-            else:
-                continue  # Skip non-JSON files
-
-            try:
-                # Open and validate JSON
-                with open(raw_file_path, "r", encoding="utf-8") as f:
-                    json.load(f)
-
-                # Ensure the subdirectory structure exists in transformed_dir
-                os.makedirs(os.path.dirname(transformed_file_path), exist_ok=True)
-                shutil.copy2(raw_file_path, transformed_file_path)
-                logging.info(
-                    f"Validated & Copied ({file_type}): {raw_file_path} -> {transformed_file_path}"
-                )
-            except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                logging.warning(f"Invalid {file_type} skipped: {raw_file_path} ({e})")
+# Parsers listed here are preferred when record counts are tied.
+# Earlier entries beat later entries in a tie.
+PREFERRED_PARSERS = [
+    "MsnParser",
+    "AimLogs4Parser",
+    "AimLogs3Parser",
+    "AimLogs2Parser",
+    "AimLogsParser",
+    "FbchatParser",
+    "GvoiceParser",
+    "GchatParser",
+]
 
 
-def parse_csv_json(raw_dir, transformed_dir):
-    """
-    Processes directories containing both CSV and JSON files.
-    - CSV files are processed using CSVRecord.
-    - JSON files are copied as-is to transformed_dir.
-    """
-    import shutil
-
-    logging.info(f"Processing CSV and JSON files in {raw_dir}...")
-
-    # Process CSV files
-    record_handler = CSVRecord(raw_dir, transformed_dir)
-    record_handler.process_directory()
-    logging.info(f"CSV processing complete. JSON files saved in {transformed_dir}")
-
-    # Process JSON files
-    for root, _, files in os.walk(raw_dir):
-        for file in files:
-            if file.endswith(".json"):
-                raw_file_path = os.path.join(root, file)
-                relative_path = os.path.relpath(raw_file_path, raw_dir)
-                transformed_file_path = os.path.join(transformed_dir, relative_path)
-
-                # Ensure the subdirectory structure exists in transformed_dir
-                os.makedirs(os.path.dirname(transformed_file_path), exist_ok=True)
-
-                # Copy the file
-                shutil.copy2(raw_file_path, transformed_file_path)
-                logging.info(
-                    f"Copied JSON file: {raw_file_path} -> {transformed_file_path}"
-                )
-
-    logging.info(f"CSV and JSON processing complete. Files saved in {transformed_dir}")
+# ---------------------------------------------------------------------------
+# Data structures
+# ---------------------------------------------------------------------------
 
 
-def parse_waze(raw_dir, transformed_dir):
-    """
-    Processes Waze CSV data, splitting stanzas and structuring JSON output.
-    """
-    logging.info(f"Processing Waze CSV data in {raw_dir}...")
-    record_handler = WazeCSVRecord(raw_dir, transformed_dir)
-    record_handler.process_waze_csv()
-    logging.info(f"Waze processing complete. JSON files saved in {transformed_dir}")
+@dataclass
+class FileResult:
+    """Track the processing result for a single file."""
+
+    file_path: str
+    messenger: str
+    owner: str
+    participant: str
+    success: bool
+    failure_reason: Optional[str] = None
+    chosen_parser: Optional[str] = None
+    record_count: int = 0
+    date_corrections: int = 0
+    input_bytes: int = 0
+    output_bytes: int = 0
+    yield_ratio: float = 0.0
+    parser_results: dict = field(default_factory=dict)
 
 
-def parse_myanimelist(raw_dir, transformed_dir):
-    """
-    Processes MyAnimeList XML exports and converts them to JSON.
-    """
-    logging.info(f"Processing MyAnimeList XML in {raw_dir}...")
+class ProcessingReport:
+    """Collect and report on all file processing results."""
 
-    for file in os.listdir(raw_dir):
-        file_path = os.path.join(raw_dir, file)
-        if file.endswith(".xml"):
-            with open(file_path, "r", encoding="utf-8") as f:
-                xml_content = f.read().strip()  # Ensure proper XML formatting
+    def __init__(self):
+        self.results: List[FileResult] = []
+        self.start_time = datetime.now()
+        self.end_time: Optional[datetime] = None
 
-            if not xml_content:
-                logging.warning(f"Skipping empty XML file: {file_path}")
-                continue  # Skip empty files
+    def add_result(self, result: FileResult):
+        self.results.append(result)
 
-            records = MyAnimeListRecord.parse_from_xml(xml_content)
+    def finalize(self):
+        self.end_time = datetime.now()
 
-            output_file = os.path.join(
-                transformed_dir, f"{os.path.splitext(file)[0]}.json"
+    @property
+    def total(self) -> int:
+        return len(self.results)
+
+    @property
+    def successful(self) -> List[FileResult]:
+        return [r for r in self.results if r.success]
+
+    @property
+    def failed(self) -> List[FileResult]:
+        return [r for r in self.results if not r.success]
+
+    def get_failures_by_reason(self) -> dict:
+        """Group failures by their reason."""
+        by_reason = {}
+        for r in self.failed:
+            reason = r.failure_reason or "Unknown"
+            by_reason.setdefault(reason, []).append(r.file_path)
+        return by_reason
+
+    @property
+    def low_yield(self) -> List[FileResult]:
+        """Successful files whose output is a small fraction of the input size."""
+        return sorted(
+            (r for r in self.successful if r.yield_ratio < LOW_YIELD_RATIO),
+            key=lambda r: r.yield_ratio,
+        )
+
+    def print_summary(self):
+        """Print a comprehensive summary to the logger."""
+        logger.info("=" * 70)
+        logger.info("PROCESSING SUMMARY")
+        logger.info("=" * 70)
+        logger.info(f"  Start time:  {self.start_time.isoformat()}")
+        logger.info(f"  End time:    {self.end_time.isoformat()}")
+        duration = (self.end_time - self.start_time).total_seconds()
+        logger.info(f"  Duration:    {duration:.2f} seconds")
+        logger.info("-" * 70)
+        logger.info(f"  Total files attempted: {self.total}")
+        logger.info(f"  Successful:            {len(self.successful)}")
+        logger.info(f"  Failed:                {len(self.failed)}")
+        if self.total > 0:
+            success_rate = (len(self.successful) / self.total) * 100
+            logger.info(f"  Success rate:          {success_rate:.1f}%")
+
+        if self.failed:
+            logger.info("-" * 70)
+            logger.info("FAILURES BY REASON:")
+            for reason, files in self.get_failures_by_reason().items():
+                logger.info(f"  [{reason}] ({len(files)} files)")
+                for f in files:
+                    logger.info(f"    - {f}")
+
+        low_yield = self.low_yield
+        if low_yield:
+            logger.info("-" * 70)
+            logger.info(
+                f"LOW YIELD (suspected incomplete, output < "
+                f"{LOW_YIELD_RATIO:.0%} of input) ({len(low_yield)} files):"
             )
-            with open(output_file, "w", encoding="utf-8") as f:
-                json.dump(records, f, indent=4)
+            for r in low_yield:
+                logger.info(
+                    f"    ratio={r.yield_ratio:.3f} "
+                    f"({r.output_bytes}/{r.input_bytes} bytes, "
+                    f"{r.record_count} records)  {r.file_path}"
+                )
 
-            logging.info(f"Saved processed MyAnimeList records to {output_file}")
+        logger.info("=" * 70)
+
+    def write_report(self, report_path: Path):
+        """Write a detailed JSON report to file."""
+        report_data = {
+            "start_time": self.start_time.isoformat(),
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "summary": {
+                "total_files": self.total,
+                "successful": len(self.successful),
+                "failed": len(self.failed),
+                "low_yield": len(self.low_yield),
+                "low_yield_ratio_threshold": LOW_YIELD_RATIO,
+            },
+            "failures_by_reason": self.get_failures_by_reason(),
+            "failed_files": [
+                {
+                    "file_path": r.file_path,
+                    "messenger": r.messenger,
+                    "owner": r.owner,
+                    "participant": r.participant,
+                    "failure_reason": r.failure_reason,
+                    "parser_results": r.parser_results,
+                }
+                for r in self.failed
+            ],
+            "successful_files": [
+                {
+                    "file_path": r.file_path,
+                    "messenger": r.messenger,
+                    "owner": r.owner,
+                    "participant": r.participant,
+                    "chosen_parser": r.chosen_parser,
+                    "record_count": r.record_count,
+                }
+                for r in self.successful
+            ],
+            "low_yield_files": [
+                {
+                    "file_path": r.file_path,
+                    "messenger": r.messenger,
+                    "owner": r.owner,
+                    "participant": r.participant,
+                    "chosen_parser": r.chosen_parser,
+                    "record_count": r.record_count,
+                    "input_bytes": r.input_bytes,
+                    "output_bytes": r.output_bytes,
+                    "yield_ratio": r.yield_ratio,
+                }
+                for r in self.low_yield
+            ],
+        }
+
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(report_path, "w", encoding="utf-8") as f:
+            json.dump(report_data, f, indent=2)
+        logger.info(f"Detailed report written to: {report_path}")
 
 
-def parse_youtube(raw_dir, transformed_dir):
+# ---------------------------------------------------------------------------
+# Author analysis
+# ---------------------------------------------------------------------------
+
+
+def author_breakdown(records):
     """
-    Processes YouTube Watch History HTML files and converts them to JSON.
+    Return a summary dict with:
+      - 'counts': Counter of author -> record count (unknown authors keyed as 'Unknown')
+      - 'unknown_count': number of unknown/missing authors
+      - 'unknown_ratio': fraction of records with unknown/missing authors
+      - 'total': total record count
     """
-    logging.info(f"Processing YouTube Watch History in {raw_dir}...")
-    for file in os.listdir(raw_dir):
-        file_path = os.path.join(raw_dir, file)
-        if file.endswith(".html"):
-            with open(file_path, "r", encoding="utf-8") as f:
-                html_content = f.read()
-            records = YouTubeRecord.parse(html_content)
-            output_file = os.path.join(
-                transformed_dir, f"{os.path.splitext(file)[0]}.json"
+    if not records:
+        return {
+            "counts": Counter(),
+            "unknown_count": 0,
+            "unknown_ratio": 1.0,
+            "total": 0,
+        }
+
+    counts = Counter()
+    unknown_count = 0
+
+    for r in records:
+        author = r.get("author", "").strip()
+        if not author or author.lower() == "unknown":
+            counts["Unknown"] += 1
+            unknown_count += 1
+        else:
+            counts[author] += 1
+
+    total = len(records)
+    return {
+        "counts": counts,
+        "unknown_count": unknown_count,
+        "unknown_ratio": unknown_count / total,
+        "total": total,
+    }
+
+
+def _slug(s):
+    """Lowercase and remove spaces for comparison purposes only."""
+    return s.lower().replace(" ", "")
+
+
+def strip_trailing_author_suffix(records):
+    """
+    When lines are merged during parsing, the message field often ends with
+    the next record's author name as a trailing suffix. Strip it if found.
+    Comparison is done on slugged (lowercased, space-stripped) forms.
+    """
+    for i, record in enumerate(records):
+        if i + 1 >= len(records):
+            break
+
+        next_author = records[i + 1].get("author", "")
+        if not next_author or next_author == "unknown":
+            continue
+
+        next_author_slug = _slug(next_author)
+        message = record.get("message", "")
+        message_slug = _slug(message)
+
+        if message_slug.endswith(next_author_slug):
+            # Work out how many original characters to remove by walking
+            # backwards through the original message, counting only the
+            # non-space characters that correspond to the slug suffix.
+            chars_to_match = len(next_author_slug)
+            trim_pos = len(message)
+            matched = 0
+
+            while trim_pos > 0 and matched < chars_to_match:
+                trim_pos -= 1
+                if message[trim_pos] != " ":
+                    matched += 1
+
+            cleaned = message[:trim_pos].rstrip()
+            logger.debug(
+                f"  Stripped trailing author suffix {next_author!r} from message: {message!r}"
             )
-            with open(output_file, "w", encoding="utf-8") as f:
-                json.dump(records, f, indent=4)
-            logging.info(f"Saved processed YouTube records to {output_file}")
+            records[i] = dict(record)
+            records[i]["message"] = cleaned
+
+    return records
 
 
-def parse_exif(raw_dir, transformed_dir):
+def unknown_author_ratio(records):
+    """Return the fraction of records with an unknown/missing author."""
+    return author_breakdown(records)["unknown_ratio"]
+
+
+# ---------------------------------------------------------------------------
+# Parser orchestration
+# ---------------------------------------------------------------------------
+
+
+def read_file_with_fallback(file_path):
+    """Try multiple encodings; return content or raise."""
+    encodings = [
+        ("utf-8", "strict"),
+        ("utf-8", "replace"),
+        ("latin-1", "strict"),  # latin-1 accepts any byte
+    ]
+    for encoding, errors in encodings:
+        try:
+            content = file_path.read_text(encoding=encoding, errors=errors)
+            if encoding != "utf-8" or errors != "strict":
+                logger.warning(f"  Read using {encoding}/{errors}: {file_path.name}")
+            return content
+        except UnicodeDecodeError:
+            continue
+    raise ValueError(f"Could not decode {file_path} with any encoding")
+
+
+def run_all_parsers(file_content, owner=None, participant=None):
     """
-    Processes images in raw_dir, extracts EXIF data,
-    and writes structured JSON to transformed_dir using ImageRecord.
+    Run all parsers on file content.
+    Returns dict of {parser_name: {"records": [...], "count": int, "error": str|None}}
     """
-    logging.info(f"Processing EXIF data in {raw_dir}...")
-    image_record = ImageRecord(raw_dir, transformed_dir)
-    records = ImageRecord.process_directory(
-        raw_dir, transformed_dir
-    )  # Returns list of processed images
+    all_parsers = [
+        ("AimLogs4Parser", AimLogs4Parser("1970-01-01", owner, participant)),
+        ("AimLogs3Parser", AimLogs3Parser(date_str="1970-01-01")),
+        ("AimLogsParser", AimLogsParser()),
+        ("AimLogs2Parser", AimLogs2Parser(date_str="1970-01-01")),
+        ("FbchatParser", FbchatParser()),
+        ("MsnParser", MsnParser()),
+        ("GvoiceParser", GvoiceParser()),
+        ("GchatParser", GchatParser()),
+    ]
 
-    output_file = os.path.join(transformed_dir, "exif_data.json")
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(records, f, indent=4)
-    logging.info(f"Saved EXIF data to {output_file}")
-
-
-PARSERS = {
-    "chat": parse_chat,
-    "images": parse_exif,
-    "apple": parse_csv_json,
-    "fitbit": parse_csv_json,
-    "github": parse_json,
-    "geojson": parse_json,
-    "lyft": parse_csv,
-    "netflix": parse_csv,
-    "pokemongo": parse_csv,
-    "reddit": parse_csv,
-    "spotify": parse_json,
-    "waze": parse_waze,
-    "myanimelist": parse_myanimelist,
-    "youtube": parse_youtube,
-}
+    results = {}
+    for name, parser in all_parsers:
+        try:
+            raw_records = parser.parse(file_content) or []
+            records = [normalize_record(r) for r in raw_records]
+            records = strip_trailing_author_suffix(records)
+            results[name] = {"records": records, "count": len(records), "error": None}
+        except Exception as e:
+            logger.debug(f"    {name}: error - {e}")
+            results[name] = {"records": [], "count": 0, "error": str(e)}
+    return results
 
 
-def ensure_output_dir_exists(directory):
-    """Ensure that the output directory exists."""
-    if not os.path.exists(directory):
-        os.makedirs(directory, exist_ok=True)
+def select_best_parser(results, preferred=None, count_tolerance=0.20):
+    """
+    Select the best parser by record count, with unknown-author ratio as a
+    tiebreaker within a tolerance band.
+
+    Parsers within `count_tolerance` (fraction) of the highest count are
+    considered tied; among those, fewest unknowns wins, then preferred rank.
+
+    Returns (name, records) or (None, []).
+    """
+    if not results:
+        return None, []
+
+    if preferred is None:
+        preferred = PREFERRED_PARSERS
+
+    max_count = max(data["count"] for data in results.values())
+    if max_count == 0:
+        return None, []
+
+    # Floor of the "close enough" band
+    threshold_count = max_count * (1.0 - count_tolerance)
+
+    def sort_key(name):
+        data = results[name]
+        count = data["count"]
+        ratio = unknown_author_ratio(data["records"])
+        try:
+            rank = preferred.index(name)
+        except ValueError:
+            rank = len(preferred)
+
+        # Parsers below the tolerance band are sorted strictly after those inside it
+        in_band = count >= threshold_count
+        return (
+            not in_band,  # False (0) sorts before True (1) -> in-band parsers first
+            ratio,  # fewest unknowns wins within the band
+            -count,  # most records wins among equal-ratio parsers
+            rank,  # preferred rank as final tiebreaker
+        )
+
+    best_name = min(results, key=sort_key)
+    return best_name, results[best_name]["records"]
+
+
+def log_parser_results(results, chosen_name, file_path):
+    """
+    Log the record count, author breakdown, and selection marker for each parser.
+    Parsers are sorted by record count descending; zero-count parsers are omitted
+    unless they produced an error.
+    """
+    logger.info(f"  Parser results for {file_path.name}:")
+
+    sorted_parsers = sorted(results.items(), key=lambda x: -x[1]["count"])
+
+    for name, data in sorted_parsers:
+        count = data["count"]
+        error = data.get("error")
+
+        # Skip zero-count, error-free parsers to keep logs concise
+        if count == 0 and not error:
+            continue
+
+        marker = " <-- SELECTED" if name == chosen_name else ""
+        error_note = f" (error: {error})" if error else ""
+        logger.info(f"    {name}: {count} records{marker}{error_note}")
+
+        if count > 0:
+            bd = author_breakdown(data["records"])
+            unknown_pct = bd["unknown_ratio"] * 100
+            logger.info(
+                f"      authors: {bd['unknown_count']} unknown ({unknown_pct:.1f}%)"
+                f" of {bd['total']} total"
+            )
+            for author, cnt in bd["counts"].most_common():
+                logger.info(f"        {author}: {cnt}")
+
+
+# ---------------------------------------------------------------------------
+# Record helpers
+# ---------------------------------------------------------------------------
+
+
+def build_output_filename(messenger, owner, participant, original_name):
+    """Build output filename: {messenger}-{owner}-{participant}-{stem}.ndjson"""
+    stem = Path(original_name).stem
+    return f"{messenger}-{owner}-{participant}-{stem}.ndjson"
+
+
+def normalize_record(msg):
+    """Normalize a parsed message dict to the standard output format."""
+    raw_author = msg.get("author", "Unknown")
+
+    if ":" in raw_author:
+        paren_open = raw_author.find("(")
+        paren_close = raw_author.find(")")
+
+        if 0 < paren_open < paren_close:
+            salvaged_author = raw_author[:paren_open].strip()
+            salvaged_time = raw_author[paren_open + 1 : paren_close].strip()
+            logger.warning(
+                f"  Colon detected in author field; salvaged author={salvaged_author!r} "
+                f"time={salvaged_time!r} from: {raw_author!r}"
+            )
+            raw_author = salvaged_author
+
+            # Only overwrite timestamp if we actually got something
+            existing_ts = msg.get("timestamp", "")
+            if salvaged_time and (
+                not existing_ts or existing_ts == "1970-01-01T00:00:00"
+            ):
+                msg = dict(msg)  # avoid mutating the original
+                msg[
+                    "timestamp"
+                ] = salvaged_time  # caller/date-correction will normalize format
+        else:
+            logger.warning(
+                f"  Colon detected in author field and could not salvage; "
+                f"marking Unknown. Raw value: {raw_author!r}"
+            )
+            raw_author = "Unknown"
+
+    author = raw_author.lower().replace(" ", "")
+
+    return {
+        "author": author,
+        "timestamp": msg.get("timestamp", "1970-01-01T00:00:00"),
+        "message": msg.get("message", ""),
+    }
+
+
+def compute_chat_id(records):
+    """Compute a stable SHA-256 hash of the chat records for deduplication."""
+    sorted_records = sorted(
+        records,
+        key=lambda r: (
+            r.get("timestamp", ""),
+            r.get("author", ""),
+            r.get("message", ""),
+        ),
+    )
+    content_str = json.dumps(sorted_records, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(content_str.encode("utf-8")).hexdigest()
+
+
+def extract_date_from_filename(filename):
+    """
+    Extract a date from a filename containing a YYYY-MM-DD pattern.
+    Returns a datetime.date or None.
+    """
+    match = re.search(r"(\d{4})-(\d{2})-(\d{2})", filename)
+    if match:
+        try:
+            return datetime(
+                int(match.group(1)), int(match.group(2)), int(match.group(3))
+            ).date()
+        except ValueError as e:
+            logger.warning(f"  Invalid date in filename '{filename}': {e}")
+    return None
+
+
+def is_epoch_date(timestamp_str):
+    """Return True if the timestamp falls on the Unix epoch date (1970-01-01)."""
+    return timestamp_str.startswith("1970-01-01")
+
+
+def parse_timestamp(timestamp_str):
+    """Parse an ISO timestamp string into a datetime object, or return None."""
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f"):
+        try:
+            return datetime.strptime(timestamp_str, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def correct_record_dates(records, filename_date, file_path):
+    """
+    Correct records with suspicious dates:
+    - Epoch date (1970-01-01): replace with filename_date, preserve time.
+    - Deviation > 2 days from filename_date: replace date, preserve time.
+
+    Returns (corrected_records, correction_count).
+    """
+    if not filename_date:
+        logger.debug(f"  No filename date available for correction: {file_path.name}")
+        return records, 0
+
+    corrected_records = []
+    epoch_corrections = 0
+    deviation_corrections = 0
+
+    for record in records:
+        timestamp_str = record.get("timestamp", "")
+        corrected_record = record.copy()
+
+        if is_epoch_date(timestamp_str):
+            parsed = parse_timestamp(timestamp_str)
+            if parsed:
+                corrected_record["timestamp"] = datetime.combine(
+                    filename_date, parsed.time()
+                ).strftime("%Y-%m-%dT%H:%M:%S")
+                epoch_corrections += 1
+                logger.debug(
+                    f"    Epoch date corrected: {timestamp_str} -> {corrected_record['timestamp']}"
+                )
+        else:
+            parsed = parse_timestamp(timestamp_str)
+            if parsed:
+                deviation_days = abs((parsed.date() - filename_date).days)
+                if deviation_days > 2:
+                    corrected_record["timestamp"] = datetime.combine(
+                        filename_date, parsed.time()
+                    ).strftime("%Y-%m-%dT%H:%M:%S")
+                    deviation_corrections += 1
+                    logger.debug(
+                        f"    Date deviation ({deviation_days} days) corrected: "
+                        f"{timestamp_str} -> {corrected_record['timestamp']}"
+                    )
+
+        corrected_records.append(corrected_record)
+
+    correction_count = epoch_corrections + deviation_corrections
+    if correction_count > 0:
+        logger.info(
+            f"  Date corrections applied: {correction_count} total "
+            f"(epoch: {epoch_corrections}, deviation: {deviation_corrections})"
+        )
+
+    return corrected_records, correction_count
+
+
+# ---------------------------------------------------------------------------
+# File processing
+# ---------------------------------------------------------------------------
+
+
+def process_file(
+    file_path, messenger, owner, participant, output_dir, seen_chat_ids
+) -> FileResult:
+    """Process a single chat file through all parsers and write output."""
+    logger.info(f"Processing: {file_path}")
+
+    result = FileResult(
+        file_path=str(file_path),
+        messenger=messenger,
+        owner=owner,
+        participant=participant,
+        success=False,
+        input_bytes=file_path.stat().st_size,
+    )
+
+    try:
+        content = read_file_with_fallback(file_path)
+    except Exception as e:
+        logger.error(f"  Failed to read file: {e}")
+        result.failure_reason = f"Read error: {e}"
+        return result
+
+    parser_results = run_all_parsers(content, owner, participant)
+    chosen_name, records = select_best_parser(parser_results)
+
+    # Store per-parser summary (including author breakdown) for the JSON report
+    result.parser_results = {
+        name: {
+            "count": data["count"],
+            "error": data.get("error"),
+            "author_counts": dict(author_breakdown(data["records"])["counts"]),
+            "unknown_count": author_breakdown(data["records"])["unknown_count"],
+        }
+        for name, data in parser_results.items()
+    }
+
+    log_parser_results(parser_results, chosen_name, file_path)
+
+    if not records:
+        logger.warning(f"  No records extracted from {file_path.name}")
+        result.failure_reason = "No records extracted by any parser"
+        return result
+
+    result.chosen_parser = chosen_name
+    result.record_count = len(records)
+
+    filename_date = extract_date_from_filename(file_path.name)
+    if filename_date:
+        logger.debug(f"  Filename date extracted: {filename_date}")
+    else:
+        logger.warning(f"  Could not extract date from filename: {file_path.name}")
+
+    corrected, correction_count = correct_record_dates(
+        records, filename_date, file_path
+    )
+
+    if correction_count > 0:
+        result.date_corrections = correction_count
+
+    chat_id = compute_chat_id(corrected)
+    if chat_id in seen_chat_ids:
+        logger.info(f"  Skipping duplicate content (chat_id: {chat_id[:12]}...)")
+        result.failure_reason = "Duplicate content (matching chat_id)"
+        return result
+
+    seen_chat_ids.add(chat_id)
+
+    output_path = output_dir / build_output_filename(
+        messenger, owner, participant, file_path.name
+    )
+
+    try:
+        # Write to a sibling temp file, then atomically replace the target
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=output_path.parent,
+            delete=False,
+            suffix=".tmp",
+        ) as tmp:
+            tmp_path = Path(tmp.name)
+            for record in corrected:
+                json.dump(record, tmp)
+                tmp.write("\n")
+        tmp_path.replace(output_path)  # atomic on POSIX
+        logger.info(f"  Saved {len(corrected)} records to {output_path.name}")
+        result.success = True
+        result.output_bytes = output_path.stat().st_size
+        result.yield_ratio = (
+            result.output_bytes / result.input_bytes if result.input_bytes else 0.0
+        )
+    except Exception as e:
+        logger.error(f"  Failed to write output: {e}")
+        result.failure_reason = f"Write error: {e}"
+        # Clean up temp file if it exists
+        if tmp_path and tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Directory walking
+# ---------------------------------------------------------------------------
+
+
+def walk_chat_directory(base_dir):
+    """
+    Yield (file_path, messenger, owner, participant) for each valid chat file.
+
+    Expected structure: base_dir/{messenger}/{owner}/{participant}/[subfolders/]files
+    """
+    for messenger_dir in sorted(base_dir.iterdir()):
+        if not messenger_dir.is_dir():
+            continue
+        for owner_dir in sorted(messenger_dir.iterdir()):
+            if not owner_dir.is_dir():
+                continue
+            for participant_dir in sorted(owner_dir.iterdir()):
+                if not participant_dir.is_dir():
+                    continue
+                for file_path in sorted(participant_dir.rglob("*")):
+                    if (
+                        file_path.is_file()
+                        and file_path.suffix.lower() in VALID_EXTENSIONS
+                    ):
+                        yield (
+                            file_path,
+                            messenger_dir.name,
+                            owner_dir.name,
+                            participant_dir.name,
+                        )
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 
 def main():
-    logging.info("Starting omni-parser.")
-    ensure_output_dir_exists(TRANSFORMED_DIR)
+    logger.info("=" * 70)
+    logger.info("Chat Log Parser - Starting")
+    logger.info("=" * 70)
 
-    if not os.path.isdir(RAW_DIR):
-        logging.error(f"RAW_DIR does not exist: {RAW_DIR}")
+    if not RAW_CHAT_DIR.exists():
+        logger.error(f"Input directory does not exist: {RAW_CHAT_DIR}")
         sys.exit(1)
 
-    for entry in os.listdir(RAW_DIR):
-        raw_subdir_path = os.path.join(RAW_DIR, entry)
-        if os.path.isdir(raw_subdir_path):
-            logging.info(f"Found directory: {entry}")
-            parser_func = PARSERS.get(entry)
-            if parser_func:
-                transformed_subdir_path = os.path.join(TRANSFORMED_DIR, entry)
-                ensure_output_dir_exists(transformed_subdir_path)
-                parser_func(raw_subdir_path, transformed_subdir_path)
-            else:
-                logging.warning(f"No parser found for directory: {entry}")
-        else:
-            logging.warning(f"Skipping file in raw root: {entry}")
+    TRANSFORMED_DIR.mkdir(parents=True, exist_ok=True)
 
-    logging.info("Finished omni-parser.")
+    report = ProcessingReport()
+    seen_chat_ids = set()
+
+    for file_path, messenger, owner, participant in walk_chat_directory(RAW_CHAT_DIR):
+        report.add_result(
+            process_file(
+                file_path, messenger, owner, participant, TRANSFORMED_DIR, seen_chat_ids
+            )
+        )
+
+    report.finalize()
+    report.print_summary()
+
+    timestamp = report.start_time.strftime("%Y%m%d_%H%M%S")
+    report.write_report(REPORT_DIR / f"parse_report_{timestamp}.json")
+
+    if report.failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
