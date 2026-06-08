@@ -370,7 +370,7 @@ def main():
     log_summary(report)
 
     timestamp = end_time.strftime("%Y%m%d_%H%M%S")
-    write_report(report, REPORT_DIR / f"newparse_report_{timestamp}.json")
+    write_report(report, REPORT_DIR / f"parse_all_report_{timestamp}.json")
 
 
 if __name__ == "__main__":

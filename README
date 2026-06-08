@@ -49,11 +49,11 @@ including files that failed to parse (grouped by reason) and **low-yield** files
 whose output is a suspiciously small fraction of the source size (possible
 incomplete parse).
 
-### `./newparse.py`
+### `./parse_all`
 
 A lighter-weight variant of the same idea (6 parsers, no date-correction or
 dedup). Writes `.ndjson` output to `userdata/transformed/chat/` and a report to
-`userdata/reports/newparse_report_*.json`. Its stderr summary reports the number
+`userdata/reports/parse_all_report_*.json`. Its stderr summary reports the number
 of files **seen**, **attempted**, and that **produced output**, plus the lists of
 unparsed and low-yield files.
 
