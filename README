@@ -1,57 +1,65 @@
 # **DataPrepper**
 
-`DataPrepper` is a tool for parsing and transforming HTML chat logs into structured JSON format. It supports multiple parsing strategies, efficiently processes files in bulk, and provides clean, normalized outputs ready for downstream processing or analysis.
+`DataPrepper` parses instant-messenger chat logs into normalized JSON. It runs
+several format-specific parsers over each input file, picks the one that extracts
+the most records, and writes one normalized output file per input containing
+`{author, timestamp, message}` records (JSON Lines / NDJSON).
 
-## **Features**
+Supported log formats: **AIM**, **Facebook Messenger**, **MSN**, **Google Voice**,
+and **Google Chat** (HTML, plus JSON for Google Chat).
 
-- **Multi-Parser Support**: Utilizes multiple parsers to ensure maximum extraction of valid records.
-- **Recursive File Processing**: Handles nested directories of `.html` and `.htm` files.
-- **Output Customization**: Outputs JSON files with recipient-date-based filenames.
-- **Collision Handling**: Avoids filename collisions with incremental numbering.
-- **Pipe-Friendly Design**: Integrates seamlessly with shell pipelines for efficient workflows.
+## Dependencies
 
-## **Usage**
+- Python 3
+- [`beautifulsoup4`](https://pypi.org/project/beautifulsoup4/) (`bs4`)
+- [`python-dateutil`](https://pypi.org/project/python-dateutil/) (`dateutil`)
 
-`./process_html_dir.sh <inputdir> <outputdir>`
+```
+pip install beautifulsoup4 python-dateutil
+```
 
-Recursively iterate a directory for .html files, creating a new directory of JSON files with a 1:1 mapping containing the following extracted information:
+## Directory layout
 
-- author
-- timestamp
-- message
+```
+userdata/
+├── compressed/chat/                      # input archives (.tar.gz/.tgz/.tar.xz/.zip)
+├── raw/chat/{messenger}/{owner}/{participant}/<file>   # extracted chat logs
+├── transformed/chat/                     # parsed output (one file per input)
+└── reports/                              # JSON run reports
+```
 
-`./process_json_dir.sh <inputdir> <outputdir>`
+## Usage
 
-Iterate through a flat directory of .json files, creating a new directory of JSON files with modified attributes/cleaned data. Modify `process_json_dir.sh` to match specific use cases. Training a BERT model requires different formats than GPT models, so changing up the applicable pipes and author metadata, etc., is required for proper training.
+### `./01_extract`
 
-`pipes/`
+Decompress every archive under `userdata/compressed/` into `userdata/raw/`,
+recursing into nested archives. This is the ingest step that populates
+`userdata/raw/chat/`.
 
-The executable scripts in the `pipes/` directory accept stdin and produce stdout, doing one of a few actions:
+### `./02_transform`
 
-╭────┬─────────────────────────────╮
-│  # │            name             │
-├────┼─────────────────────────────┤
-│  0 │ augment_author_age.py       │
-│  1 │ augment_convo_id.py         │
-│  2 │ augment_duplicate_field.py  │
-│  3 │ augment_replydeltas.py      │
-│  4 │ augment_sequence_id.py      │
-│  5 │ calc_message_stats.py       │
-│  6 │ drop_empty_values.py        │
-│  7 │ drop_invalid_timestamp.py   │
-│  8 │ drop_nonmatching_authors.py │
-│  9 │ drop_short_messages.py      │
-│ 10 │ rewrite_author.py           │
-│ 11 │ rewrite_author_merge.py     │
-│ 12 │ rewrite_author_norm.py      │
-│ 13 │ rewrite_newlines.py         │
-│ 14 │ rewrite_omit_fields.py      │
-│ 15 │ rewrite_system_messages.py  │
-│ 16 │ rewrite_user_assistant.py   │
-╰────┴─────────────────────────────╯
+The primary parser. Walks `userdata/raw/chat/{messenger}/{owner}/{participant}/`,
+runs all parsers on each `.html`/`.htm` file, selects the best result, corrects
+record dates from the filename, de-duplicates identical conversations by content
+hash, and writes `.ndjson` output to `userdata/transformed/chat/` named
+`{messenger}-{owner}-{participant}-{stem}.ndjson`.
 
-- **augment_**: Create a new field for the record and return the record
-- **drop_**   : Drop a record matching a criteria
-- **rewrite_**: Modify the value of a record and return the record
+A detailed JSON run report is written to `userdata/reports/parse_report_*.json`,
+including files that failed to parse (grouped by reason) and **low-yield** files
+whose output is a suspiciously small fraction of the source size (possible
+incomplete parse).
 
-These can be chained infinitely for any amount of preprocessing based on the downstream needs.
+### `./newparse.py`
+
+A lighter-weight variant of the same idea (6 parsers, no date-correction or
+dedup). Writes `.json` output to `userdata/transformed/chat/` and a report to
+`userdata/reports/newparse_report_*.json`. Its stderr summary reports the number
+of files **seen**, **attempted**, and that **produced output**, plus the lists of
+unparsed and low-yield files.
+
+## `xform/`
+
+Pluggable per-format parsers. `base_parser.py` defines the parser interface; each
+`*_parser.py` implements extraction for one log format. Adding support for a new
+format means dropping in another parser module and registering it in the entry
+script.
