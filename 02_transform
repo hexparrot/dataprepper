@@ -43,6 +43,12 @@ REPORT_DIR = BASE_DIR / "userdata" / "reports"
 
 VALID_EXTENSIONS = {".html", ".htm"}
 
+# Successfully-parsed files whose JSON output is below this fraction of the
+# original file size are flagged as "suspected incomplete parse". Heuristic and
+# tunable: HTML markup overhead means good parses are already a small fraction
+# of the input, so this threshold is deliberately low.
+LOW_YIELD_RATIO = 0.05
+
 # Parsers listed here are preferred when record counts are tied.
 # Earlier entries beat later entries in a tie.
 PREFERRED_PARSERS = [
@@ -75,6 +81,9 @@ class FileResult:
     chosen_parser: Optional[str] = None
     record_count: int = 0
     date_corrections: int = 0
+    input_bytes: int = 0
+    output_bytes: int = 0
+    yield_ratio: float = 0.0
     parser_results: dict = field(default_factory=dict)
 
 
@@ -112,6 +121,14 @@ class ProcessingReport:
             by_reason.setdefault(reason, []).append(r.file_path)
         return by_reason
 
+    @property
+    def low_yield(self) -> List[FileResult]:
+        """Successful files whose output is a small fraction of the input size."""
+        return sorted(
+            (r for r in self.successful if r.yield_ratio < LOW_YIELD_RATIO),
+            key=lambda r: r.yield_ratio,
+        )
+
     def print_summary(self):
         """Print a comprehensive summary to the logger."""
         logger.info("=" * 70)
@@ -137,6 +154,20 @@ class ProcessingReport:
                 for f in files:
                     logger.info(f"    - {f}")
 
+        low_yield = self.low_yield
+        if low_yield:
+            logger.info("-" * 70)
+            logger.info(
+                f"LOW YIELD (suspected incomplete, output < "
+                f"{LOW_YIELD_RATIO:.0%} of input) ({len(low_yield)} files):"
+            )
+            for r in low_yield:
+                logger.info(
+                    f"    ratio={r.yield_ratio:.3f} "
+                    f"({r.output_bytes}/{r.input_bytes} bytes, "
+                    f"{r.record_count} records)  {r.file_path}"
+                )
+
         logger.info("=" * 70)
 
     def write_report(self, report_path: Path):
@@ -148,6 +179,8 @@ class ProcessingReport:
                 "total_files": self.total,
                 "successful": len(self.successful),
                 "failed": len(self.failed),
+                "low_yield": len(self.low_yield),
+                "low_yield_ratio_threshold": LOW_YIELD_RATIO,
             },
             "failures_by_reason": self.get_failures_by_reason(),
             "failed_files": [
@@ -171,6 +204,20 @@ class ProcessingReport:
                     "record_count": r.record_count,
                 }
                 for r in self.successful
+            ],
+            "low_yield_files": [
+                {
+                    "file_path": r.file_path,
+                    "messenger": r.messenger,
+                    "owner": r.owner,
+                    "participant": r.participant,
+                    "chosen_parser": r.chosen_parser,
+                    "record_count": r.record_count,
+                    "input_bytes": r.input_bytes,
+                    "output_bytes": r.output_bytes,
+                    "yield_ratio": r.yield_ratio,
+                }
+                for r in self.low_yield
             ],
         }
 
@@ -573,6 +620,7 @@ def process_file(
         owner=owner,
         participant=participant,
         success=False,
+        input_bytes=file_path.stat().st_size,
     )
 
     try:
@@ -647,6 +695,10 @@ def process_file(
         tmp_path.replace(output_path)  # atomic on POSIX
         logger.info(f"  Saved {len(corrected)} records to {output_path.name}")
         result.success = True
+        result.output_bytes = output_path.stat().st_size
+        result.yield_ratio = (
+            result.output_bytes / result.input_bytes if result.input_bytes else 0.0
+        )
     except Exception as e:
         logger.error(f"  Failed to write output: {e}")
         result.failure_reason = f"Write error: {e}"
