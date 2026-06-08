@@ -5,8 +5,8 @@ Chat log parser - processes organized chat directories and outputs structured JS
 Expected input structure:
     userdata/raw/chat/{messenger}/{owner}/{participant}/<file>
 
-Output naming:
-    {messenger}-{owner}-{participant}-{original_filename}.json
+Output naming (NDJSON: one JSON record per line):
+    {messenger}-{owner}-{participant}-{original_filename}.ndjson
 """
 import os
 import sys
@@ -121,9 +121,9 @@ def log_parser_results(results, chosen_name, file_path):
 
 
 def build_output_filename(messenger, owner, participant, original_name):
-    """Build output filename: messenger-owner-participant-original_name.json"""
+    """Build output filename: messenger-owner-participant-original_name.ndjson"""
     stem = Path(original_name).stem
-    return f"{messenger}-{owner}-{participant}-{stem}.json"
+    return f"{messenger}-{owner}-{participant}-{stem}.ndjson"
 
 
 def normalize_record(msg):
