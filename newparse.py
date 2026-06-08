@@ -135,6 +135,28 @@ def normalize_record(msg):
     }
 
 
+def read_file_with_fallback(file_path):
+    """Try multiple encodings; return content or raise.
+
+    Old IM logs are frequently latin-1/cp1252 rather than UTF-8, so a strict
+    UTF-8 read drops a meaningful number of otherwise-parseable files.
+    """
+    encodings = [
+        ("utf-8", "strict"),
+        ("utf-8", "replace"),
+        ("latin-1", "strict"),  # latin-1 accepts any byte
+    ]
+    for encoding, errors in encodings:
+        try:
+            content = file_path.read_text(encoding=encoding, errors=errors)
+            if encoding != "utf-8" or errors != "strict":
+                logger.warning(f"  Read using {encoding}/{errors}: {file_path.name}")
+            return content
+        except UnicodeDecodeError:
+            continue
+    raise ValueError(f"Could not decode {file_path} with any encoding")
+
+
 def process_file(file_path, messenger, owner, participant, output_dir):
     """Process a single chat file through all parsers. Returns a FileOutcome."""
     logger.info(f"Processing: {file_path}")
@@ -153,7 +175,7 @@ def process_file(file_path, messenger, owner, participant, output_dir):
         )
 
     try:
-        content = file_path.read_text(encoding="utf-8")
+        content = read_file_with_fallback(file_path)
     except Exception as e:
         logger.error(f"  Failed to read file: {e}")
         return outcome("read_error")
