@@ -52,7 +52,7 @@ incomplete parse).
 ### `./newparse.py`
 
 A lighter-weight variant of the same idea (6 parsers, no date-correction or
-dedup). Writes `.json` output to `userdata/transformed/chat/` and a report to
+dedup). Writes `.ndjson` output to `userdata/transformed/chat/` and a report to
 `userdata/reports/newparse_report_*.json`. Its stderr summary reports the number
 of files **seen**, **attempted**, and that **produced output**, plus the lists of
 unparsed and low-yield files.
